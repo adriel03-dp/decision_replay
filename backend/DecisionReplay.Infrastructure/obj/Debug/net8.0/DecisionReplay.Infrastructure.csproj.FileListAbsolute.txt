@@ -1,0 +1,12 @@
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\bin\Debug\net8.0\DecisionReplay.Infrastructure.deps.json
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\bin\Debug\net8.0\DecisionReplay.Infrastructure.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\bin\Debug\net8.0\DecisionReplay.Infrastructure.pdb
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\DecisionReplay.Infrastructure.GeneratedMSBuildEditorConfig.editorconfig
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\DecisionReplay.Infrastructure.AssemblyInfoInputs.cache
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\DecisionReplay.Infrastructure.AssemblyInfo.cs
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\DecisionReplay.Infrastructure.csproj.CoreCompileInputs.cache
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\DecisionReplay.Infrastructure.sourcelink.json
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\DecisionReplay.Infrastructure.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\refint\DecisionReplay.Infrastructure.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\DecisionReplay.Infrastructure.pdb
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Infrastructure\obj\Debug\net8.0\ref\DecisionReplay.Infrastructure.dll

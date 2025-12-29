@@ -1,0 +1,11 @@
+{
+  "Version": 1,
+  "Hash": "fbUCFAzP+Wp2V/MoFOplKbdRPMDWP3HEsEiw8oNhDx8=",
+  "Source": "DecisionReplay.API",
+  "BasePath": "_content/DecisionReplay.API",
+  "Mode": "Default",
+  "ManifestType": "Build",
+  "ReferencedProjectsConfiguration": [],
+  "DiscoveryPatterns": [],
+  "Assets": []
+}
