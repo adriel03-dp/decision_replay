@@ -1,9 +1,42 @@
+using DotNetEnv;
+using DecisionReplay.Infrastructure.Persistence.Mongo;
+using DecisionReplay.Infrastructure.Persistence.Repositories;
+using DecisionReplay.Infrastructure.Services;
+using DecisionReplay.Application.Interfaces;
+using DecisionReplay.Application.Services;
+
+// Load .env from parent directory (backend folder)
+var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
+if (File.Exists(envPath))
+{
+    Env.Load(envPath);
+}
+else
+{
+    Env.Load(); // Try current directory
+}
+
 var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
+builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
+
+// MongoDB Configuration
+var mongoSettings = new MongoSettings
+{
+    ConnectionString = Environment.GetEnvironmentVariable("MONGODB_CONNECTION_STRING")
+        ?? throw new InvalidOperationException("Mongo connection string missing"),
+    DatabaseName = Environment.GetEnvironmentVariable("MONGODB_DATABASE_NAME")
+        ?? "DecisionReplay"
+};
+
+builder.Services.AddSingleton(mongoSettings);
+builder.Services.AddSingleton<MongoContext>();
+builder.Services.AddScoped<IDecisionRepository, DecisionRepository>();
+builder.Services.AddScoped<IAIReasoningService, GeminiReasoningService>();
+builder.Services.AddScoped<DecisionService>();
 
 var app = builder.Build();
 
@@ -15,30 +48,6 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
-
-var summaries = new[]
-{
-    "Freezing", "Bracing", "Chilly", "Cool", "Mild", "Warm", "Balmy", "Hot", "Sweltering", "Scorching"
-};
-
-app.MapGet("/weatherforecast", () =>
-{
-    var forecast =  Enumerable.Range(1, 5).Select(index =>
-        new WeatherForecast
-        (
-            DateOnly.FromDateTime(DateTime.Now.AddDays(index)),
-            Random.Shared.Next(-20, 55),
-            summaries[Random.Shared.Next(summaries.Length)]
-        ))
-        .ToArray();
-    return forecast;
-})
-.WithName("GetWeatherForecast")
-.WithOpenApi();
+app.MapControllers();
 
 app.Run();
-
-record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
-{
-    public int TemperatureF => 32 + (int)(TemperatureC / 0.5556);
-}
