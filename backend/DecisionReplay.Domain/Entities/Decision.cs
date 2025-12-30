@@ -1,4 +1,5 @@
 using DecisionReplay.Domain.Enums;
+using System.Diagnostics.CodeAnalysis;
 
 namespace DecisionReplay.Domain.Entities;
 
@@ -14,6 +15,7 @@ public class Decision
 
     private Decision() { }
 
+    [SetsRequiredMembers]
     public Decision(string type, string createdBy)
     {
         Id = Guid.NewGuid();

@@ -1,4 +1,5 @@
 using DecisionReplay.Domain.Enums;
+using System.Diagnostics.CodeAnalysis;
 
 namespace DecisionReplay.Domain.Entities;
 
@@ -12,6 +13,7 @@ public class DecisionEvent
 
     private DecisionEvent() { }
 
+    [SetsRequiredMembers]
     public DecisionEvent(
         Guid decisionId,
         DecisionEventType eventType,
