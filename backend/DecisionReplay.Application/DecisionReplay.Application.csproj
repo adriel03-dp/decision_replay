@@ -6,4 +6,8 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\DecisionReplay.Domain\DecisionReplay.Domain.csproj" />
+  </ItemGroup>
+
 </Project>

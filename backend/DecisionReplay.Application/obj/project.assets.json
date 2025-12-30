@@ -1,11 +1,30 @@
 {
   "version": 3,
   "targets": {
-    "net8.0": {}
+    "net8.0": {
+      "DecisionReplay.Domain/1.0.0": {
+        "type": "project",
+        "framework": ".NETCoreApp,Version=v8.0",
+        "compile": {
+          "bin/placeholder/DecisionReplay.Domain.dll": {}
+        },
+        "runtime": {
+          "bin/placeholder/DecisionReplay.Domain.dll": {}
+        }
+      }
+    }
   },
-  "libraries": {},
+  "libraries": {
+    "DecisionReplay.Domain/1.0.0": {
+      "type": "project",
+      "path": "../DecisionReplay.Domain/DecisionReplay.Domain.csproj",
+      "msbuildProject": "../DecisionReplay.Domain/DecisionReplay.Domain.csproj"
+    }
+  },
   "projectFileDependencyGroups": {
-    "net8.0": []
+    "net8.0": [
+      "DecisionReplay.Domain >= 1.0.0"
+    ]
   },
   "packageFolders": {
     "C:\\Users\\lenovo\\.nuget\\packages\\": {}
@@ -31,7 +50,11 @@
       "frameworks": {
         "net8.0": {
           "targetAlias": "net8.0",
-          "projectReferences": {}
+          "projectReferences": {
+            "C:\\Users\\lenovo\\Desktop\\decision_replay\\backend\\DecisionReplay.Domain\\DecisionReplay.Domain.csproj": {
+              "projectPath": "C:\\Users\\lenovo\\Desktop\\decision_replay\\backend\\DecisionReplay.Domain\\DecisionReplay.Domain.csproj"
+            }
+          }
         }
       },
       "warningProperties": {

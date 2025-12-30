@@ -10,3 +10,7 @@ C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\obj\D
 C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\obj\Debug\net8.0\refint\DecisionReplay.Application.dll
 C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\obj\Debug\net8.0\DecisionReplay.Application.pdb
 C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\obj\Debug\net8.0\ref\DecisionReplay.Application.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\obj\Debug\net8.0\DecisionReplay.Application.csproj.AssemblyReference.cache
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\bin\Debug\net8.0\DecisionReplay.Domain.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\bin\Debug\net8.0\DecisionReplay.Domain.pdb
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.Application\obj\Debug\net8.0\Decision.896EA55A.Up2Date
