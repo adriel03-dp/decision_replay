@@ -32,3 +32,17 @@ C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\obj\Debug\net
 C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\obj\Debug\net8.0\DecisionReplay.API.pdb
 C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\obj\Debug\net8.0\DecisionReplay.API.genruntimeconfig.cache
 C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\obj\Debug\net8.0\ref\DecisionReplay.API.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DnsClient.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DotNetEnv.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\MongoDB.Bson.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\MongoDB.Driver.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\SharpCompress.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\Snappier.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\Sprache.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\ZstdSharp.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DecisionReplay.Application.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DecisionReplay.Domain.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DecisionReplay.Infrastructure.dll
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DecisionReplay.Infrastructure.pdb
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DecisionReplay.Application.pdb
+C:\Users\lenovo\Desktop\decision_replay\backend\DecisionReplay.API\bin\Debug\net8.0\DecisionReplay.Domain.pdb
