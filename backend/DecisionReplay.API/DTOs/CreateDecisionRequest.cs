@@ -1,7 +1,10 @@
 namespace DecisionReplay.API.DTOs;
 
 public record CreateDecisionRequest(
-    string Type,
-    string CreatedBy,
-    Dictionary<string, object> InputData
+    string Title,              // e.g., "Launch MVP Product"
+    string Scope,              // Features, deliverables, quality standards
+    string Timeline,           // Target dates, milestones, duration
+    string Resources,          // Team size, budget, tools, skills
+    string Constraints,        // Risks, dependencies, technical debt, limitations
+    string CreatedBy
 );

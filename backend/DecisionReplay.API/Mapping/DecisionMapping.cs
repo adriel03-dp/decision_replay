@@ -8,10 +8,16 @@ public static class DecisionMapping
     public static DecisionResponse ToResponse(this Decision decision)
         => new(
             decision.Id.ToString(),
-            decision.Type,
+            decision.Title,
+            decision.Scope,
+            decision.Timeline,
+            decision.Resources,
+            decision.Constraints,
             decision.Status.ToString(),
             decision.Outcome.ToString(),
-            decision.CreatedAt
+            decision.FeasibilityScore,
+            decision.CreatedAt,
+            decision.CreatedBy
         );
 
     public static DecisionEventResponse ToResponse(this DecisionEvent e)
