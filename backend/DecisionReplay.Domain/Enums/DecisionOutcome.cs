@@ -2,7 +2,9 @@ namespace DecisionReplay.Domain.Enums;
 
 public enum DecisionOutcome
 {
-    Pending,
-    Approved,
-    Rejected
+    Draft,              // Still being planned
+    Feasible,           // Plan looks realistic
+    RiskyButPossible,   // High risk but achievable
+    NeedsAdjustment,    // Significant issues identified
+    Committed           // User has finalized and committed
 }
