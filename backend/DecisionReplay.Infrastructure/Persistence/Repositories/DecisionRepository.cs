@@ -41,4 +41,26 @@ public sealed class DecisionRepository : IDecisionRepository
             .Find(d => d.Id == decisionId)
             .FirstOrDefaultAsync();
     }
+
+    public async Task<IReadOnlyList<Decision>> GetAllAsync()
+    {
+        return await _decisions
+            .Find(_ => true)
+            .SortByDescending(d => d.CreatedAt)
+            .ToListAsync();
+    }
+
+    public async Task UpdateAsync(Decision decision)
+    {
+        await _decisions.ReplaceOneAsync(
+            d => d.Id == decision.Id,
+            decision
+        );
+    }
+
+    public async Task DeleteAsync(Guid decisionId)
+    {
+        await _decisions.DeleteOneAsync(d => d.Id == decisionId);
+        await _events.DeleteManyAsync(e => e.DecisionId == decisionId);
+    }
 }
