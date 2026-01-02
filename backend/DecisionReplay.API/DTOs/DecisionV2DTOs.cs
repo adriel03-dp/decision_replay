@@ -1,0 +1,90 @@
+namespace DecisionReplay.API.DTOs;
+
+/// <summary>
+/// Request DTO for natural language decision creation
+/// SOLID: Single Responsibility - Only represents request data
+/// Clean Architecture: API layer DTO
+/// </summary>
+public record NaturalLanguageDecisionRequest(
+    string Input,      // Free-form natural language input
+    string CreatedBy
+);
+
+/// <summary>
+/// Response DTO for decision with full context
+/// </summary>
+public record DecisionV2Response(
+    Guid Id,
+    string NaturalLanguageInput,
+    Dictionary<string, object> InferredAttributes,
+    string? DomainType,
+    string Status,
+    string Outcome,
+    DateTime CreatedAt,
+    DateTime? LastModifiedAt,
+    string CreatedBy
+);
+
+/// <summary>
+/// Response DTO for decision analysis
+/// </summary>
+public record AnalysisResponse(
+    Guid AnalysisId,
+    double FeasibilityScore,
+    string FeasibilityVerdict,
+    string ExecutiveSummary,
+    List<string> Pros,
+    List<string> Cons,
+    List<RiskResponse> Risks,
+    List<string> Assumptions,
+    List<string> Recommendations,
+    double ConfidenceLevel,
+    DateTime GeneratedAt,
+    string ModelUsed
+);
+
+public record RiskResponse(
+    string Description,
+    string Impact,
+    string? Mitigation
+);
+
+/// <summary>
+/// Response DTO for decision schema
+/// </summary>
+public record SchemaResponse(
+    Guid Id,
+    string DomainType,
+    Dictionary<string, string> Fields,
+    DateTime GeneratedAt
+);
+
+/// <summary>
+/// Response DTO for replay result
+/// </summary>
+public record ReplayResponse(
+    Guid ReplayId,
+    DateTime ReplayedAt,
+    List<ChangeResponse> Changes,
+    bool HasSignificantChanges,
+    AnalysisResponse? OriginalAnalysis,
+    AnalysisResponse? UpdatedAnalysis,
+    double FeasibilityDelta,
+    string ImpactSummary,
+    Dictionary<string, object> VisualizationData
+);
+
+public record ChangeResponse(
+    string Field,
+    string? OldValue,
+    string? NewValue,
+    bool IsSignificant,
+    string ChangeType
+);
+
+/// <summary>
+/// Request for replaying a decision with updated input
+/// </summary>
+public record ReplayDecisionRequest(
+    string UpdatedInput
+);
