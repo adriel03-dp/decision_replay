@@ -90,6 +90,8 @@ Your analysis should help decision-makers understand:
 - What could go wrong?
 - How to improve the plan";
 
+            var taskDescription = "Provide a comprehensive feasibility analysis with overallFeasibility score (0-100), recommendation, analysis, riskFactors, recommendations, and confidence level.";
+
             var prompt = $@"{systemPrompt}
 
 PLANNING DECISION TO ANALYZE:
@@ -105,34 +107,13 @@ Created: {decision.CreatedAt}
 Created By: {decision.CreatedBy}
 
 TASK:
-Provide a comprehensive feasibility analysis in the following JSON format:
-{{
-  ""overallFeasibility"": 65,  // 0-100 score
-  ""recommendation"": ""FEASIBLE | RISKY_BUT_POSSIBLE | NEEDS_ADJUSTMENT | NOT_FEASIBLE"",
-  ""analysis"": ""2-3 sentence executive summary of feasibility"",
-  ""timelineAnalysis"": ""Is the timeline realistic? Specific concerns or adjustments needed."",
-  ""resourceAnalysis"": ""Are resources sufficient? What's missing? (team, budget, tools)"",
-  ""scopeAnalysis"": ""Is scope achievable with given resources/timeline? Complexity assessment."",
-  ""constraintAnalysis"": ""How do constraints (dependencies, technical debt, risks) impact feasibility?"",
-  ""riskFactors"": [
-    {{"risk"": "Aggressive timeline"", "impact"": "HIGH"", "mitigation"": "Add 4 weeks or reduce scope""}},
-    { { "risk"": "Team size insufficient"", "impact"": "MEDIUM"", "mitigation"": "Hire 1 senior developer""} }
-  ],
-  ""recommendations"": [
-    ""Extend timeline from 12 to 16 weeks"",
-    ""Add 2 developers to team"",
-    ""Move feature X to phase 2""
-  ],
-  ""confidence"": 0.85
-}}
+{taskDescription}
+Be specific and honest. If the plan is unrealistic, say so clearly with concrete alternatives.";
 
-    Be specific and honest.If the plan is unrealistic, say so clearly with concrete alternatives.";
-
-
-                var requestBody = new
+            var requestBody = new
+            {
+                contents = new[]
                 {
-                    contents = new[]
-                    {
                     new
                     {
                         parts = new[]
@@ -140,34 +121,34 @@ Provide a comprehensive feasibility analysis in the following JSON format:
                             new { text = prompt }
                         }
                     }
-                    }
-                };
+                }
+            };
 
-    var json = JsonSerializer.Serialize(requestBody);
-    var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-    var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={_apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={_apiKey}";
 
-    Console.WriteLine($"Calling Gemini API for decision {decision.Id}...");
+            Console.WriteLine($"Calling Gemini API for decision {decision.Id}...");
             var response = await _httpClient.PostAsync(url, content);
 
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-    Console.WriteLine($"Gemini API error: {response.StatusCode} - {error}");
+                Console.WriteLine($"Gemini API error: {response.StatusCode} - {error}");
                 throw new Exception($"Gemini API returned {response.StatusCode}: {error}");
             }
 
             var responseJson = await response.Content.ReadAsStringAsync();
-    var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+            var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
 
-    var generatedText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "No response generated";
+            var generatedText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "No response generated";
 
             Console.WriteLine($"Gemini API response received for decision {decision.Id}");
 
             return new
             {
-    DecisionId = decision.Id,
+                DecisionId = decision.Id,
                 Analysis = generatedText,
                 Recommendation = "See analysis for details",
                 Confidence = 0.85,
@@ -177,49 +158,49 @@ Provide a comprehensive feasibility analysis in the following JSON format:
         }
         catch (Exception ex)
         {
-    Console.WriteLine($"Error generating reasoning: {ex.Message}");
-    return new
-    {
-        DecisionId = decision.Id,
-        Analysis = $"Failed to generate AI reasoning: {ex.Message}",
-        Recommendation = "Manual review recommended",
-        Confidence = 0.0,
-        Error = true
-    };
-}
+            Console.WriteLine($"Error generating reasoning: {ex.Message}");
+            return new
+            {
+                DecisionId = decision.Id,
+                Analysis = $"Failed to generate AI reasoning: {ex.Message}",
+                Recommendation = "Manual review recommended",
+                Confidence = 0.0,
+                Error = true
+            };
+        }
     }
 
     public async Task<object> AnswerDecisionQueryAsync(Decision decision, string userQuery)
-{
-    if (string.IsNullOrEmpty(_apiKey))
     {
-        return new
+        if (string.IsNullOrEmpty(_apiKey))
         {
-            Response = "AI service is not configured.",
-            IsError = true
-        };
-    }
+            return new
+            {
+                Response = "AI service is not configured.",
+                IsError = true
+            };
+        }
 
-    // Validate query is planning decision-related
-    var offTopicKeywords = new[] {
+        // Validate query is planning decision-related
+        var offTopicKeywords = new[] {
             "write code", "create app", "recipe", "weather", "joke", "story",
             "movie", "game", "sports", "news", "celebrity", "song", "math homework"
         };
 
-    if (offTopicKeywords.Any(keyword => userQuery.ToLower().Contains(keyword)))
-    {
-        return new
+        if (offTopicKeywords.Any(keyword => userQuery.ToLower().Contains(keyword)))
         {
-            Response = "I only analyze planning decisions (feasibility, resources, timelines, risks). Please ask about this specific project plan.",
-            IsOffTopic = true
-        };
-    }
+            return new
+            {
+                Response = "I only analyze planning decisions (feasibility, resources, timelines, risks). Please ask about this specific project plan.",
+                IsOffTopic = true
+            };
+        }
 
-    try
-    {
-        await WaitForRateLimitAsync();
+        try
+        {
+            await WaitForRateLimitAsync();
 
-        var systemPrompt = @"You are a planning feasibility analyst. Answer questions ONLY about the specific planning decision provided below.
+            var systemPrompt = @"You are a planning feasibility analyst. Answer questions ONLY about the specific planning decision provided below.
 
 STRICT RULES:
 1. ONLY discuss this planning decision - no general advice, no off-topic content
@@ -228,7 +209,7 @@ STRICT RULES:
 4. Be specific and actionable - reference actual data from the plan
 5. Never generate code, tell stories, or discuss unrelated topics";
 
-        var prompt = $@"{systemPrompt}
+            var prompt = $@"{systemPrompt}
 
 PLANNING DECISION CONTEXT:
 Title: {decision.Title}
@@ -252,10 +233,10 @@ Guidelines:
 - Provide actionable suggestions
 - Keep responses concise (2-4 sentences)";
 
-        var requestBody = new
-        {
-            contents = new[]
+            var requestBody = new
             {
+                contents = new[]
+                {
                     new
                     {
                         parts = new[]
@@ -264,64 +245,64 @@ Guidelines:
                         }
                     }
                 }
-        };
+            };
 
-        var json = JsonSerializer.Serialize(requestBody);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
+            var json = JsonSerializer.Serialize(requestBody);
+            var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={_apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={_apiKey}";
 
-        var response = await _httpClient.PostAsync(url, content);
+            var response = await _httpClient.PostAsync(url, content);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            var error = await response.Content.ReadAsStringAsync();
-            Console.WriteLine($"Gemini API error: {response.StatusCode} - {error}");
-            throw new Exception($"Gemini API returned {response.StatusCode}");
+            if (!response.IsSuccessStatusCode)
+            {
+                var error = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"Gemini API error: {response.StatusCode} - {error}");
+                throw new Exception($"Gemini API returned {response.StatusCode}");
+            }
+
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+
+            var generatedText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "No response generated";
+
+            return new
+            {
+                Response = generatedText,
+                DecisionId = decision.Id,
+                Query = userQuery,
+                GeneratedAt = DateTime.UtcNow
+            };
         }
-
-        var responseJson = await response.Content.ReadAsStringAsync();
-        var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
-
-        var generatedText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "No response generated";
-
-        return new
+        catch (Exception ex)
         {
-            Response = generatedText,
-            DecisionId = decision.Id,
-            Query = userQuery,
-            GeneratedAt = DateTime.UtcNow
-        };
+            Console.WriteLine($"Error answering query: {ex.Message}");
+            return new
+            {
+                Response = $"Failed to process query: {ex.Message}",
+                IsError = true
+            };
+        }
     }
-    catch (Exception ex)
+
+    // Response models for JSON deserialization
+    private class GeminiResponse
     {
-        Console.WriteLine($"Error answering query: {ex.Message}");
-        return new
-        {
-            Response = $"Failed to process query: {ex.Message}",
-            IsError = true
-        };
+        public GeminiCandidate[]? Candidates { get; set; }
     }
-}
 
-// Response models for JSON deserialization
-private class GeminiResponse
-{
-    public GeminiCandidate[]? Candidates { get; set; }
-}
+    private class GeminiCandidate
+    {
+        public GeminiContent? Content { get; set; }
+    }
 
-private class GeminiCandidate
-{
-    public GeminiContent? Content { get; set; }
-}
+    private class GeminiContent
+    {
+        public GeminiPart[]? Parts { get; set; }
+    }
 
-private class GeminiContent
-{
-    public GeminiPart[]? Parts { get; set; }
-}
-
-private class GeminiPart
-{
-    public string? Text { get; set; }
-}
+    private class GeminiPart
+    {
+        public string? Text { get; set; }
+    }
 }
