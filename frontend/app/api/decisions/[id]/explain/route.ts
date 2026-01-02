@@ -2,7 +2,12 @@ import { type NextRequest, NextResponse } from "next/server"
 import { generateDecisionExplanation, isGeminiConfigured } from "@/lib/gemini-client"
 import { decisionApi } from "@/lib/api"
 
-export async function POST(request: NextRequest, { params }: { params: { id: string } }) {
+export async function POST(
+  request: NextRequest, 
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params
+  
   try {
     if (!isGeminiConfigured()) {
       return NextResponse.json({ 
@@ -11,12 +16,12 @@ export async function POST(request: NextRequest, { params }: { params: { id: str
       }, { status: 503 })
     }
 
-    const decision = await decisionApi.getDecisionById(params.id)
+    const decision = await decisionApi.getDecisionById(id)
     if (!decision) {
       return NextResponse.json({ error: "Decision not found" }, { status: 404 })
     }
 
-    const events = await decisionApi.getEvents(params.id)
+    const events = await decisionApi.getEvents(id)
 
     const explanation = await generateDecisionExplanation(decision, events)
 
