@@ -17,13 +17,14 @@ public class ReplayController : ControllerBase
     }
 
     [HttpGet("{decisionId}")]
-    public async Task<ActionResult<ReplayResponse>> Replay(string decisionId)
+    public async Task<ActionResult<object>> Replay(string decisionId)
     {
         var events = await _repository.GetEventsAsync(Guid.Parse(decisionId));
 
-        return Ok(new ReplayResponse(
-            decisionId,
-            events.Select(e => e.ToResponse())
-        ));
+        return Ok(new
+        {
+            DecisionId = decisionId,
+            Events = events.Select(e => e.ToResponse())
+        });
     }
 }

@@ -29,7 +29,11 @@ public class DecisionsController : ControllerBase
         CreateDecisionRequest request)
     {
         var decision = await _service.CreateDecisionAsync(
-            request.Type,
+            request.Title,
+            request.Scope,
+            request.Timeline,
+            request.Resources,
+            request.Constraints,
             request.CreatedBy
         );
 
@@ -98,7 +102,7 @@ public class DecisionsController : ControllerBase
 
         // Get all events including the new reasoning
         var events = await _repository.GetEventsAsync(Guid.Parse(id));
-        var latestReasoning = events.LastOrDefault(e => e.EventType == Domain.Enums.DecisionEventType.AIReasoningGenerated);
+        var latestReasoning = events.LastOrDefault(e => e.EventType == Domain.Enums.DecisionEventType.FeasibilityGenerated);
 
         return Ok(new
         {
