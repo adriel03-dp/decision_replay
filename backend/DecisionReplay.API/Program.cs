@@ -4,6 +4,7 @@ using DecisionReplay.Infrastructure.Persistence.Repositories;
 using DecisionReplay.Infrastructure.Services;
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Application.Services;
+using DecisionReplay.API.Middleware;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.IdentityModel.Tokens;
 using System.Text;
@@ -26,6 +27,10 @@ builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+// Global Exception Handler (Production-ready)
+builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
+builder.Services.AddProblemDetails();
+
 // Add HttpClient for external API calls
 builder.Services.AddHttpClient();
 
@@ -42,9 +47,19 @@ builder.Services.AddSingleton(mongoSettings);
 builder.Services.AddSingleton<MongoContext>();
 builder.Services.AddScoped<IDecisionRepository, DecisionRepository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
+
+// V1 Services (Legacy - keeping for backward compatibility)
 builder.Services.AddScoped<IAIReasoningService, GeminiReasoningService>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 builder.Services.AddScoped<DecisionService>();
+
+// V2 Services (Refactored - Domain-Agnostic Architecture)
+// SOLID: Dependency Inversion - Register interfaces with implementations
+builder.Services.AddScoped<IIntentParser, GeminiIntentParser>();
+builder.Services.AddScoped<IAIReasoningServiceV2, GeminiReasoningServiceV2>();
+builder.Services.AddScoped<IReplayEngine, DecisionReplayEngine>();
+builder.Services.AddScoped<IVisualizationProvider, VisualizationProvider>();
+builder.Services.AddScoped<DecisionServiceV2>();
 
 // JWT Authentication
 var jwtSecret = Environment.GetEnvironmentVariable("JWT_SECRET")
@@ -90,6 +105,10 @@ builder.Services.AddCors(options =>
 var app = builder.Build();
 
 // Configure the HTTP request pipeline.
+
+// Global Exception Handler
+app.UseExceptionHandler(options => { }); // Enables IExceptionHandler
+
 if (app.Environment.IsDevelopment())
 {
     app.UseSwagger();
@@ -102,6 +121,10 @@ app.UseCors("AllowFrontend");
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
+
+// Rate Limiting Middleware (must be after authentication)
+app.UseMiddleware<GeminiRateLimitMiddleware>();
+
 app.MapControllers();
 
 app.Run();
