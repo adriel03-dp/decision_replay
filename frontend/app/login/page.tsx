@@ -80,7 +80,7 @@ export default function LoginPage() {
                   <Input
                     id="email"
                     type="email"
-                    placeholder="you@company.com"
+                    placeholder="Enter your email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 bg-white/50 dark:bg-slate-800/50 border-green-100 dark:border-slate-700 focus:border-green-400 focus:ring-green-400/30"

@@ -149,7 +149,7 @@ export default function SignUpPage() {
                     id="name"
                     name="name"
                     type="text"
-                    placeholder="John Doe"
+                    placeholder="Enter your Name"
                     value={formData.name}
                     onChange={handleChange}
                     className="pl-10 bg-white/50 dark:bg-slate-800/50 border-green-100 dark:border-slate-700 focus:border-green-400 focus:ring-green-400/30"
@@ -168,7 +168,7 @@ export default function SignUpPage() {
                     id="email"
                     name="email"
                     type="email"
-                    placeholder="you@company.com"
+                    placeholder="Enter your Email"
                     value={formData.email}
                     onChange={handleChange}
                     className="pl-10 bg-white/50 dark:bg-slate-800/50 border-green-100 dark:border-slate-700 focus:border-green-400 focus:ring-green-400/30"
