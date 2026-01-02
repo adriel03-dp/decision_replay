@@ -1,3 +1,6 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+
 namespace DecisionReplay.Domain.ValueObjects;
 
 /// <summary>
@@ -5,11 +8,19 @@ namespace DecisionReplay.Domain.ValueObjects;
 /// SOLID: Single Responsibility - Represents the structure of a decision
 /// Design: Allows different domains (software, construction, logistics) without code changes
 /// </summary>
+[BsonIgnoreExtraElements]
 public class DecisionSchema
 {
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid Id { get; private set; }
+
+    [BsonElement("domainType")]
     public string DomainType { get; private set; } = string.Empty;
+
+    [BsonElement("fields")]
     public Dictionary<string, string> Fields { get; private set; } = new();
+
+    [BsonElement("generatedAt")]
     public DateTime GeneratedAt { get; private set; }
 
     private DecisionSchema() { }

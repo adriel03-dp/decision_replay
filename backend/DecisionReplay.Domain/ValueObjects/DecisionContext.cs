@@ -1,3 +1,5 @@
+using MongoDB.Bson.Serialization.Attributes;
+
 namespace DecisionReplay.Domain.ValueObjects;
 
 /// <summary>
@@ -5,10 +7,16 @@ namespace DecisionReplay.Domain.ValueObjects;
 /// SOLID: Single Responsibility - Only encapsulates decision context data
 /// Clean Architecture: Pure domain object with no external dependencies
 /// </summary>
+[BsonIgnoreExtraElements]
 public class DecisionContext
 {
+    [BsonElement("naturalLanguageInput")]
     public string NaturalLanguageInput { get; private set; } = string.Empty;
+
+    [BsonElement("inferredAttributes")]
     public Dictionary<string, object> InferredAttributes { get; private set; } = new();
+
+    [BsonElement("capturedAt")]
     public DateTime CapturedAt { get; private set; }
 
     private DecisionContext() { }

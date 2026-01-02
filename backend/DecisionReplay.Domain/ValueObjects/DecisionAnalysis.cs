@@ -1,3 +1,6 @@
+using MongoDB.Bson;
+using MongoDB.Bson.Serialization.Attributes;
+
 namespace DecisionReplay.Domain.ValueObjects;
 
 /// <summary>
@@ -5,8 +8,10 @@ namespace DecisionReplay.Domain.ValueObjects;
 /// SOLID: Single Responsibility - Encapsulates AI analysis results
 /// Design: Provides structured data for both textual display and visualization
 /// </summary>
+[BsonIgnoreExtraElements]
 public class DecisionAnalysis
 {
+    [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid AnalysisId { get; private set; }
     public double FeasibilityScore { get; private set; } // 0-100
     public string FeasibilityVerdict { get; private set; } // FEASIBLE, RISKY_BUT_POSSIBLE, NEEDS_ADJUSTMENT, NOT_FEASIBLE
