@@ -2,6 +2,7 @@ using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.ValueObjects;
 using System.Text;
 using System.Text.Json;
+using System.Net;
 
 namespace DecisionReplay.Infrastructure.Services;
 
@@ -52,8 +53,11 @@ public class GeminiIntentParser : IIntentParser
 
         try
         {
+            Console.WriteLine($"[GEMINI] Starting intent parsing for input: {naturalLanguageInput.Substring(0, Math.Min(50, naturalLanguageInput.Length))}...");
             var prompt = BuildIntentParsingPrompt(naturalLanguageInput);
+            Console.WriteLine("[GEMINI] Calling Gemini API for intent parsing...");
             var response = await CallGeminiApiAsync(prompt);
+            Console.WriteLine($"[GEMINI] Received response: {response.Substring(0, Math.Min(100, response.Length))}...");
             var parsed = ParseGeminiResponse(response);
 
             foreach (var kvp in parsed)
@@ -68,7 +72,7 @@ public class GeminiIntentParser : IIntentParser
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Intent parsing failed: {ex.Message}. Using fallback.");
+            Console.WriteLine($"[GEMINI] Intent parsing failed: {ex.Message}. Using fallback.");
 
             // Fallback
             inferredAttributes["domain"] = "Unknown";
@@ -163,24 +167,48 @@ Provide 5-8 relevant fields for {domain}.";
             contents = new[]
             {
                 new { parts = new[] { new { text = prompt } } }
+            },
+            generationConfig = new
+            {
+                temperature = 0.7,
+                maxOutputTokens = 1024
             }
         };
 
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={_apiKey}";
+        // Use gemini-2.5-flash for fastest responses
+        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
 
+        Console.WriteLine($"[GEMINI] Making request to: {url.Replace(_apiKey!, "***API_KEY***")}");
+        Console.WriteLine($"[GEMINI] Request body length: {json.Length} characters");
+        
         var response = await _httpClient.PostAsync(url, content);
+        Console.WriteLine($"[GEMINI] Response status: {response.StatusCode}");
 
         if (!response.IsSuccessStatusCode)
         {
             var error = await response.Content.ReadAsStringAsync();
-            throw new Exception($"Gemini API error: {response.StatusCode} - {error}");
+            var userFriendlyMessage = GetUserFriendlyErrorMessage(response.StatusCode, error);
+            throw new Exception(userFriendlyMessage);
         }
 
         var responseJson = await response.Content.ReadAsStringAsync();
         var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
         return geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+    }
+
+    private string GetUserFriendlyErrorMessage(HttpStatusCode statusCode, string error)
+    {
+        return statusCode switch
+        {
+            HttpStatusCode.TooManyRequests => "AI analysis is temporarily unavailable due to high demand. Please try again in a few minutes.",
+            HttpStatusCode.Unauthorized => "AI analysis service is not properly configured. Please contact support.",
+            HttpStatusCode.BadRequest => "Invalid request to AI service. The decision content may be too complex.",
+            HttpStatusCode.InternalServerError => "AI analysis service is temporarily down. Please try again later.",
+            HttpStatusCode.RequestTimeout => "AI analysis took too long to complete. Please try a shorter description.",
+            _ => "AI analysis is temporarily unavailable. Your decision will be saved with basic analysis."
+        };
     }
 
     private Dictionary<string, object> ParseGeminiResponse(string response)

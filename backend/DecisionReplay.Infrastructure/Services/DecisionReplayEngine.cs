@@ -31,7 +31,7 @@ public class DecisionReplayEngine : IReplayEngine
         _reasoningService = reasoningService ?? throw new ArgumentNullException(nameof(reasoningService));
     }
 
-    public async Task<DecisionReplayResult> CompareContextsAsync(
+    public Task<DecisionReplayResult> CompareContextsAsync(
         DecisionContext original,
         DecisionContext updated)
     {
@@ -51,7 +51,7 @@ public class DecisionReplayEngine : IReplayEngine
         result.AddVisualizationData("changesByType", changes.GroupBy(c => c.ChangeType)
             .ToDictionary(g => g.Key, g => g.Count()));
 
-        return result;
+        return Task.FromResult(result);
     }
 
     public async Task<DecisionReplayResult> ReplayDecisionAsync(
