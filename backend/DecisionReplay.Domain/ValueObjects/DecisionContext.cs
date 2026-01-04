@@ -11,15 +11,16 @@ namespace DecisionReplay.Domain.ValueObjects;
 public class DecisionContext
 {
     [BsonElement("naturalLanguageInput")]
-    public string NaturalLanguageInput { get; private set; } = string.Empty;
+    public string NaturalLanguageInput { get; set; } = string.Empty;
 
     [BsonElement("inferredAttributes")]
-    public Dictionary<string, object> InferredAttributes { get; private set; } = new();
+    public Dictionary<string, object> InferredAttributes { get; set; } = new();
 
     [BsonElement("capturedAt")]
-    public DateTime CapturedAt { get; private set; }
+    public DateTime CapturedAt { get; set; }
 
-    private DecisionContext() { }
+    // Parameterless constructor for MongoDB deserialization
+    public DecisionContext() { }
 
     public DecisionContext(string naturalLanguageInput, Dictionary<string, object> inferredAttributes)
     {

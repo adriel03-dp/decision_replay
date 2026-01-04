@@ -12,18 +12,18 @@ namespace DecisionReplay.Domain.ValueObjects;
 public class DecisionSchema
 {
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
-    public Guid Id { get; private set; }
+    public Guid Id { get; set; }
 
     [BsonElement("domainType")]
-    public string DomainType { get; private set; } = string.Empty;
+    public string DomainType { get; set; } = string.Empty;
 
     [BsonElement("fields")]
-    public Dictionary<string, string> Fields { get; private set; } = new();
+    public Dictionary<string, string> Fields { get; set; } = new();
 
     [BsonElement("generatedAt")]
-    public DateTime GeneratedAt { get; private set; }
+    public DateTime GeneratedAt { get; set; }
 
-    private DecisionSchema() { }
+    public DecisionSchema() { }
 
     public DecisionSchema(string domainType, Dictionary<string, string> fields)
     {

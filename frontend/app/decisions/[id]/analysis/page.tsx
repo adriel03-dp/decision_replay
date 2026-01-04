@@ -37,14 +37,8 @@ export default function DecisionAnalysisPage() {
         const data = await response.json()
         setDecision(data)
         
-        // Check if analysis exists
-        if (data.status === 'Analyzed' || data.status === 'Completed') {
-          // Analysis might already be in the decision object
-          // For now, trigger analysis if not already done
-          if (!analysis) {
-            await analyzeDecision()
-          }
-        }
+        // Try to fetch existing analysis
+        await fetchExistingAnalysis()
       } else {
         throw new Error('Failed to fetch decision')
       }
@@ -67,6 +61,29 @@ export default function DecisionAnalysisPage() {
       setTimeout(() => router.push('/decisions'), 2000)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function fetchExistingAnalysis() {
+    try {
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/${decisionId}/analysis`, {
+        headers: {
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        }
+      })
+      
+      if (response.ok) {
+        const analysisData = await response.json()
+        setAnalysis(analysisData)
+      } else if (response.status === 404) {
+        // No analysis exists, trigger automatic analysis
+        console.log('No existing analysis found, triggering automatic analysis...')
+        await analyzeDecision()
+      }
+      // If other error, ignore - user can manually trigger analysis
+    } catch (error) {
+      // Ignore errors - analysis might not exist yet
+      console.log('Error fetching analysis, user can trigger manually')
     }
   }
 
@@ -260,38 +277,121 @@ export default function DecisionAnalysisPage() {
               <p className="text-foreground/70">{analysis.executiveSummary}</p>
             </Card>
 
-            {/* Pros & Cons */}
+            {/* Current Plan Assessment */}
+            {analysis.currentPlanAnalysis && (
+              <Card className="p-6 border-blue-100 dark:border-slate-700 bg-blue-50/30 dark:bg-blue-900/10 backdrop-blur">
+                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <AlertCircle className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                  Current Plan Assessment
+                </h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1 text-blue-900 dark:text-blue-200">Timeline Assessment</h4>
+                    <p className="text-sm text-foreground/70 mb-3">{analysis.currentPlanAnalysis.timelineAssessment}</p>
+                    <h4 className="font-semibold text-sm mb-1 text-blue-900 dark:text-blue-200">Scope Assessment</h4>
+                    <p className="text-sm text-foreground/70">{analysis.currentPlanAnalysis.scopeAssessment}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1 text-blue-900 dark:text-blue-200">Budget Assessment</h4>
+                    <p className="text-sm text-foreground/70 mb-3">{analysis.currentPlanAnalysis.budgetAssessment}</p>
+                    <h4 className="font-semibold text-sm mb-1 text-blue-900 dark:text-blue-200">Resource Assessment</h4>
+                    <p className="text-sm text-foreground/70">{analysis.currentPlanAnalysis.resourceAssessment}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Current Plan Pros & Cons */}
             <div className="grid md:grid-cols-2 gap-6">
               <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
                 <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
                   <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                  Pros
+                  Current Plan Strengths
                 </h3>
                 <ul className="space-y-2">
                   {analysis.pros?.map((pro: string, idx: number) => (
                     <li key={idx} className="text-sm text-foreground/70 flex items-start gap-2">
-                      <span className="text-green-600 dark:text-green-400 mt-0.5">•</span>
+                      <span className="text-green-600 dark:text-green-400 mt-0.5">✓</span>
                       {pro}
                     </li>
                   ))}
                 </ul>
               </Card>
 
-              <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
+              <Card className="p-6 border-red-100 dark:border-slate-700 bg-red-50/30 dark:bg-red-900/10 backdrop-blur">
                 <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
                   <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-                  Cons
+                  Current Plan Issues
                 </h3>
                 <ul className="space-y-2">
                   {analysis.cons?.map((con: string, idx: number) => (
                     <li key={idx} className="text-sm text-foreground/70 flex items-start gap-2">
-                      <span className="text-red-600 dark:text-red-400 mt-0.5">•</span>
+                      <span className="text-red-600 dark:text-red-400 mt-0.5">⚠</span>
                       {con}
                     </li>
                   ))}
                 </ul>
               </Card>
             </div>
+
+            {/* Optimized Solution */}
+            {analysis.optimizedSolution && (
+              <Card className="p-6 border-emerald-100 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-900/10 backdrop-blur">
+                <h2 className="text-lg font-bold mb-4 flex items-center gap-2">
+                  <Sparkles className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                  Optimized Solution (Success Rate: {analysis.optimizedSolution.successProbability}%)
+                </h2>
+                <div className="grid md:grid-cols-2 gap-4">
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1 text-emerald-900 dark:text-emerald-200">Improved Timeline</h4>
+                    <p className="text-sm text-foreground/70 mb-3">{analysis.optimizedSolution.improvedTimeline}</p>
+                    <h4 className="font-semibold text-sm mb-1 text-emerald-900 dark:text-emerald-200">Clarified Scope</h4>
+                    <p className="text-sm text-foreground/70">{analysis.optimizedSolution.clarifiedScope}</p>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-sm mb-1 text-emerald-900 dark:text-emerald-200">Budget Optimization</h4>
+                    <p className="text-sm text-foreground/70 mb-3">{analysis.optimizedSolution.budgetOptimization}</p>
+                    <h4 className="font-semibold text-sm mb-1 text-emerald-900 dark:text-emerald-200">Resource Strategy</h4>
+                    <p className="text-sm text-foreground/70">{analysis.optimizedSolution.resourceStrategy}</p>
+                  </div>
+                </div>
+              </Card>
+            )}
+
+            {/* Optimized Plan Pros & Cons */}
+            {analysis.optimizedPros && analysis.optimizedCons && (
+              <div className="grid md:grid-cols-2 gap-6">
+                <Card className="p-6 border-emerald-100 dark:border-slate-700 bg-emerald-50/30 dark:bg-emerald-900/10 backdrop-blur">
+                  <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+                    <CheckCircle2 className="w-5 h-5 text-emerald-600 dark:text-emerald-400" />
+                    Optimized Plan Benefits
+                  </h3>
+                  <ul className="space-y-2">
+                    {analysis.optimizedPros.map((pro: string, idx: number) => (
+                      <li key={idx} className="text-sm text-foreground/70 flex items-start gap-2">
+                        <span className="text-emerald-600 dark:text-emerald-400 mt-0.5">★</span>
+                        {pro}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+
+                <Card className="p-6 border-orange-100 dark:border-slate-700 bg-orange-50/30 dark:bg-orange-900/10 backdrop-blur">
+                  <h3 className="text-lg font-bold mb-3 flex items-center gap-2">
+                    <AlertCircle className="w-5 h-5 text-orange-600 dark:text-orange-400" />
+                    Optimized Plan Trade-offs
+                  </h3>
+                  <ul className="space-y-2">
+                    {analysis.optimizedCons.map((con: string, idx: number) => (
+                      <li key={idx} className="text-sm text-foreground/70 flex items-start gap-2">
+                        <span className="text-orange-600 dark:text-orange-400 mt-0.5">◊</span>
+                        {con}
+                      </li>
+                    ))}
+                  </ul>
+                </Card>
+              </div>
+            )}
 
             {/* Risks */}
             {analysis.risks && analysis.risks.length > 0 && (

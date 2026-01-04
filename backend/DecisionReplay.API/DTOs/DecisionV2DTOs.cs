@@ -33,14 +33,33 @@ public record AnalysisResponse(
     double FeasibilityScore,
     string FeasibilityVerdict,
     string ExecutiveSummary,
+    CurrentPlanAnalysisResponse? CurrentPlanAnalysis,
     List<string> Pros,
     List<string> Cons,
+    OptimizedSolutionResponse? OptimizedSolution,
+    List<string> OptimizedPros,
+    List<string> OptimizedCons,
     List<RiskResponse> Risks,
     List<string> Assumptions,
     List<string> Recommendations,
     double ConfidenceLevel,
     DateTime GeneratedAt,
     string ModelUsed
+);
+
+public record CurrentPlanAnalysisResponse(
+    string TimelineAssessment,
+    string ScopeAssessment,
+    string BudgetAssessment,
+    string ResourceAssessment
+);
+
+public record OptimizedSolutionResponse(
+    string ImprovedTimeline,
+    string ClarifiedScope,
+    string BudgetOptimization,
+    string ResourceStrategy,
+    double SuccessProbability
 );
 
 public record RiskResponse(

@@ -33,8 +33,23 @@ public static class DecisionV2Mapping
             analysis.FeasibilityScore,
             analysis.FeasibilityVerdict,
             analysis.ExecutiveSummary,
+            analysis.CurrentPlanAnalysis != null ? new CurrentPlanAnalysisResponse(
+                analysis.CurrentPlanAnalysis.TimelineAssessment,
+                analysis.CurrentPlanAnalysis.ScopeAssessment,
+                analysis.CurrentPlanAnalysis.BudgetAssessment,
+                analysis.CurrentPlanAnalysis.ResourceAssessment
+            ) : null,
             analysis.Pros,
             analysis.Cons,
+            analysis.OptimizedSolution != null ? new OptimizedSolutionResponse(
+                analysis.OptimizedSolution.ImprovedTimeline,
+                analysis.OptimizedSolution.ClarifiedScope,
+                analysis.OptimizedSolution.BudgetOptimization,
+                analysis.OptimizedSolution.ResourceStrategy,
+                analysis.OptimizedSolution.SuccessProbability
+            ) : null,
+            analysis.OptimizedPros,
+            analysis.OptimizedCons,
             analysis.Risks.Select(r => new RiskResponse(r.Description, r.Impact, r.Mitigation)).ToList(),
             analysis.Assumptions,
             analysis.Recommendations,
