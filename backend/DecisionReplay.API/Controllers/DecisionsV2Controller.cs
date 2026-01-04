@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Authorization;
 using DecisionReplay.Application.Services;
+using DecisionReplay.Application.Interfaces;
 using DecisionReplay.API.DTOs;
 using DecisionReplay.API.Mapping;
 using DecisionReplay.Domain.Entities;
@@ -38,16 +39,20 @@ namespace DecisionReplay.API.Controllers;
 /// </summary>
 [ApiController]
 [Route("api/v2/decisions")]
-// Temporarily remove [Authorize] for testing - ADD BACK IN PRODUCTION
+[Authorize]
 public class DecisionsV2Controller : ControllerBase
 {
     private readonly DecisionServiceV2 _service;
-    private static readonly Dictionary<Guid, DecisionV2> _inMemoryStore = new(); // Static for persistence during app lifetime
+    private readonly IDecisionV2Repository _repository;
     private readonly ILogger<DecisionsV2Controller> _logger;
 
-    public DecisionsV2Controller(DecisionServiceV2 service, ILogger<DecisionsV2Controller> logger)
+    public DecisionsV2Controller(
+        DecisionServiceV2 service,
+        IDecisionV2Repository repository,
+        ILogger<DecisionsV2Controller> logger)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
+        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -74,17 +79,74 @@ public class DecisionsV2Controller : ControllerBase
             _logger.LogInformation("Creating decision for user {User}", userId);
 
             // Create decision (parses intent, generates schema)
+            _logger.LogInformation("Step 1: Calling CreateDecisionAsync...");
             var decision = await _service.CreateDecisionAsync(request.Input, userId);
-            _inMemoryStore[decision.Id] = decision;
+            _logger.LogInformation("Step 2: Decision object created, saving to MongoDB...");
+
+            await _repository.CreateAsync(decision);
+            _logger.LogInformation("Step 3: Decision {DecisionId} saved to MongoDB", decision.Id);
 
             _logger.LogInformation("Decision {DecisionId} created successfully for user {User}", decision.Id, userId);
             return Ok(decision.ToResponse());
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create decision for user {User}", User.Identity?.Name);
-            throw; // Let global exception handler deal with it
+            _logger.LogError(ex, "Failed to create decision for user {User}. Error: {Error}", User.Identity?.Name, ex.ToString());
+
+            // Return user-friendly error message
+            var userMessage = GetUserFriendlyErrorMessage(ex);
+            return StatusCode(500, new
+            {
+                error = "Unable to create decision",
+                message = userMessage,
+                canRetry = true
+            });
         }
+    }
+
+    /// <summary>
+    /// Update a decision
+    /// PUT /api/v2/decisions/{id}
+    /// </summary>
+    [HttpPut("{id}")]
+    [ProducesResponseType(typeof(DecisionV2Response), 200)]
+    [ProducesResponseType(404)]
+    public async Task<ActionResult<DecisionV2Response>> Update(Guid id, [FromBody] UpdateDecisionV2Request request)
+    {
+        var existing = await _repository.GetByIdAsync(id);
+        if (existing == null)
+        {
+            return NotFound(new { error = $"Decision {id} not found" });
+        }
+
+        // Update context if new input provided (triggers re-analysis requirement)
+        if (!string.IsNullOrEmpty(request.UpdatedInput))
+        {
+            var newContext = new DecisionContext(request.UpdatedInput, existing.Context.InferredAttributes);
+            existing.UpdateContext(newContext);
+        }
+
+        await _repository.UpdateAsync(existing);
+        return Ok(existing.ToResponse());
+    }
+
+    /// <summary>
+    /// Delete a decision
+    /// DELETE /api/v2/decisions/{id}
+    /// </summary>
+    [HttpDelete("{id}")]
+    [ProducesResponseType(204)]
+    [ProducesResponseType(404)]
+    public async Task<ActionResult> Delete(Guid id)
+    {
+        var existing = await _repository.GetByIdAsync(id);
+        if (existing == null)
+        {
+            return NotFound(new { error = $"Decision {id} not found" });
+        }
+
+        await _repository.DeleteAsync(id);
+        return NoContent();
     }
 
     /// <summary>
@@ -94,12 +156,24 @@ public class DecisionsV2Controller : ControllerBase
     [HttpGet("{id}")]
     [ProducesResponseType(typeof(DecisionV2Response), 200)]
     [ProducesResponseType(typeof(object), 404)]
-    public ActionResult<DecisionV2Response> GetById(Guid id)
+    public async Task<ActionResult<DecisionV2Response>> GetById(Guid id)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        _logger.LogInformation("Fetching decision {DecisionId} for user {User}", id, User.Identity?.Name);
+        
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
         {
             _logger.LogWarning("Decision {DecisionId} not found for user {User}", id, User.Identity?.Name);
             return NotFound(new { error = "Decision not found" });
+        }
+
+        _logger.LogInformation("Decision {DecisionId} found, Context is {IsNull}", id, decision.Context == null ? "NULL" : "NOT NULL");
+        
+        if (decision.Context == null)
+        {
+            _logger.LogError("Decision {DecisionId} has NULL Context! CreatedBy: {CreatedBy}, Status: {Status}", 
+                id, decision.CreatedBy, decision.Status);
+            return StatusCode(500, new { error = "Decision data is corrupted (null context)" });
         }
 
         return Ok(decision.ToResponse());
@@ -110,9 +184,10 @@ public class DecisionsV2Controller : ControllerBase
     /// GET /api/v2/decisions/{id}/schema
     /// </summary>
     [HttpGet("{id}/schema")]
-    public ActionResult<SchemaResponse> GetSchema(Guid id)
+    public async Task<ActionResult<SchemaResponse>> GetSchema(Guid id)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         if (decision.Schema == null)
@@ -128,12 +203,14 @@ public class DecisionsV2Controller : ControllerBase
     [HttpPost("{id}/analyze")]
     public async Task<ActionResult<AnalysisResponse>> Analyze(Guid id)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         try
         {
             var analysis = await _service.AnalyzeDecisionAsync(decision);
+            await _repository.UpdateAsync(decision);
             return Ok(analysis.ToResponse());
         }
         catch (Exception ex)
@@ -147,9 +224,10 @@ public class DecisionsV2Controller : ControllerBase
     /// GET /api/v2/decisions/{id}/analysis
     /// </summary>
     [HttpGet("{id}/analysis")]
-    public ActionResult<AnalysisResponse> GetAnalysis(Guid id)
+    public async Task<ActionResult<AnalysisResponse>> GetAnalysis(Guid id)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         if (decision.Analysis == null)
@@ -165,7 +243,8 @@ public class DecisionsV2Controller : ControllerBase
     [HttpPost("{id}/replay")]
     public async Task<ActionResult<ReplayResponse>> Replay(Guid id, [FromBody] ReplayDecisionRequest request)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         if (string.IsNullOrWhiteSpace(request.UpdatedInput))
@@ -194,7 +273,8 @@ public class DecisionsV2Controller : ControllerBase
     [HttpGet("{id}/visualizations")]
     public async Task<ActionResult<Dictionary<string, object>>> GetVisualizations(Guid id)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         try
@@ -213,9 +293,10 @@ public class DecisionsV2Controller : ControllerBase
     /// GET /api/v2/decisions/{id}/analytics
     /// </summary>
     [HttpGet("{id}/analytics")]
-    public ActionResult<object> GetAnalytics(Guid id)
+    public async Task<ActionResult<object>> GetAnalytics(Guid id)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         if (decision.Analysis == null)
@@ -367,7 +448,8 @@ public class DecisionsV2Controller : ControllerBase
     [HttpPost("{id}/query")]
     public async Task<ActionResult<object>> Query(Guid id, [FromBody] QueryRequest request)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         if (string.IsNullOrWhiteSpace(request.Question))
@@ -389,14 +471,16 @@ public class DecisionsV2Controller : ControllerBase
     /// POST /api/v2/decisions/{id}/commit
     /// </summary>
     [HttpPost("{id}/commit")]
-    public ActionResult<DecisionV2Response> Commit(Guid id)
+    public async Task<ActionResult<DecisionV2Response>> Commit(Guid id)
     {
-        if (!_inMemoryStore.TryGetValue(id, out var decision))
+        var decision = await _repository.GetByIdAsync(id);
+        if (decision == null)
             return NotFound(new { error = "Decision not found" });
 
         try
         {
             decision.CommitDecision();
+            await _repository.UpdateAsync(decision);
             return Ok(decision.ToResponse());
         }
         catch (InvalidOperationException ex)
@@ -406,14 +490,44 @@ public class DecisionsV2Controller : ControllerBase
     }
 
     /// <summary>
-    /// Get all decisions (temporary endpoint for demo)
+    /// Get all decisions
     /// GET /api/v2/decisions
     /// </summary>
     [HttpGet]
-    public ActionResult<List<DecisionV2Response>> GetAll()
+    public async Task<ActionResult<List<DecisionV2Response>>> GetAll()
     {
-        var decisions = _inMemoryStore.Values.Select(d => d.ToResponse()).ToList();
-        return Ok(decisions);
+        var decisions = await _repository.GetAllAsync();
+        return Ok(decisions.Select(d => d.ToResponse()).ToList());
+    }
+
+    /// <summary>
+    /// Convert technical exception messages to user-friendly error messages
+    /// </summary>
+    private string GetUserFriendlyErrorMessage(Exception ex)
+    {
+        var message = ex.Message.ToLower();
+
+        // Check for specific AI/API related errors
+        if (message.Contains("ai analysis is temporarily unavailable due to high demand"))
+            return "AI analysis is currently at capacity. Please try again in a few minutes.";
+
+        if (message.Contains("ai analysis service is not properly configured"))
+            return "AI features are currently unavailable. Your decision will be saved with basic analysis.";
+
+        if (message.Contains("ai analysis took too long"))
+            return "The analysis is taking longer than expected. Try using a shorter description.";
+
+        if (message.Contains("mongodb") || message.Contains("database"))
+            return "There was an issue saving your decision. Please try again.";
+
+        if (message.Contains("timeout") || message.Contains("took too long"))
+            return "The request is taking longer than expected. Please try again with a shorter description.";
+
+        if (message.Contains("authentication") || message.Contains("unauthorized"))
+            return "Your session has expired. Please log in again.";
+
+        // Default user-friendly message
+        return "We're experiencing technical difficulties. Your request could not be completed at this time. Please try again.";
     }
 }
 
