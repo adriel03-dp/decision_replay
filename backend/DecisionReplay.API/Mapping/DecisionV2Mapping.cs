@@ -15,8 +15,8 @@ public static class DecisionV2Mapping
     {
         return new DecisionV2Response(
             decision.Id,
-            decision.Context.NaturalLanguageInput,
-            decision.Context.InferredAttributes,
+            decision.Context?.NaturalLanguageInput ?? string.Empty,
+            decision.Context?.InferredAttributes ?? new Dictionary<string, object>(),
             decision.Schema?.DomainType,
             decision.Status.ToString(),
             decision.Outcome.ToString(),
