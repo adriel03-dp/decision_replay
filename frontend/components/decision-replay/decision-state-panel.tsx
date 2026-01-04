@@ -1,4 +1,4 @@
-import type { DecisionEvent } from "@/lib/types"
+import type { DecisionEvent } from "@/lib/api-types"
 
 interface DecisionStatePanelProps {
   event: DecisionEvent | null

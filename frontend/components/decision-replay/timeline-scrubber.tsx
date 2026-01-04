@@ -1,7 +1,7 @@
 "use client"
 
 import { useState } from "react"
-import type { DecisionEvent } from "@/lib/types"
+import type { DecisionEvent } from "@/lib/api-types"
 import { DecisionEventMarker } from "./decision-event-marker"
 
 interface TimelineScrubberProps {

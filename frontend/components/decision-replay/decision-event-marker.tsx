@@ -1,29 +1,33 @@
 "use client"
 
-import type { EventType } from "@/lib/types"
+import type { EventType } from "@/lib/api-types"
 
 interface DecisionEventMarkerProps {
-  eventType: EventType
+  eventType: string  // Accept string from API, will be cast to EventType
   timestamp: string
   isActive?: boolean
   onClick?: () => void
 }
 
 export function DecisionEventMarker({ eventType, timestamp, isActive = false, onClick }: DecisionEventMarkerProps) {
-  const eventIcons = {
+  const eventIcons: Record<string, string> = {
     INPUT_CAPTURED: "📥",
     RULE_EVALUATED: "✓",
     AI_REASONING: "🤖",
     HUMAN_OVERRIDE: "👤",
+    RISK_CALCULATED: "⚠",
     DECISION_FINALIZED: "✔",
+    AUDIT_LOGGED: "📋",
   }
 
-  const eventLabels = {
+  const eventLabels: Record<string, string> = {
     INPUT_CAPTURED: "Input",
     RULE_EVALUATED: "Rules",
     AI_REASONING: "AI",
     HUMAN_OVERRIDE: "Override",
+    RISK_CALCULATED: "Risk",
     DECISION_FINALIZED: "Finalized",
+    AUDIT_LOGGED: "Audit",
   }
 
   return (

@@ -1,4 +1,4 @@
-import type { DecisionEvent } from "@/lib/types"
+import type { DecisionEvent } from "@/lib/api-types"
 import { ConfidenceIndicator } from "./confidence-indicator"
 import { FactorBar } from "./factor-bar"
 
