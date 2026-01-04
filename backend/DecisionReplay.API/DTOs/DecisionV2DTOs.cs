@@ -88,3 +88,12 @@ public record ChangeResponse(
 public record ReplayDecisionRequest(
     string UpdatedInput
 );
+
+/// <summary>
+/// Request DTO for updating a decision
+/// Supports updating context (natural language input) and status
+/// </summary>
+public record UpdateDecisionV2Request(
+    string? UpdatedInput,  // New natural language input (triggers context update)
+    string? Status         // New status: Draft, InReview, Finalized
+);
