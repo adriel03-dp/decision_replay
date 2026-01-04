@@ -1,13 +1,38 @@
 // ============= Backend API Types (matching .NET DTOs) =============
 
+// V2 Decision Response - matches DecisionV2Response from backend
 export interface Decision {
   id: string;
-  type: string;
-  status: string;
-  currentOutcome: string;
+  naturalLanguageInput: string;
+  inferredAttributes: Record<string, any>;
+  domainType?: string;
+  status: DecisionStatus;
+  outcome: DecisionOutcome;
   createdAt: string;
-  createdBy?: string;
-  riskScore?: number;
+  lastModifiedAt?: string;
+  createdBy: string;
+}
+
+// V2 Analysis Response - matches AnalysisResponse from backend
+export interface AnalysisResponse {
+  analysisId: string;
+  feasibilityScore: number;
+  feasibilityVerdict: string;
+  executiveSummary: string;
+  pros: string[];
+  cons: string[];
+  risks: RiskResponse[];
+  assumptions: string[];
+  recommendations: string[];
+  confidenceLevel: number;
+  generatedAt: string;
+  modelUsed: string;
+}
+
+export interface RiskResponse {
+  description: string;
+  impact: string;
+  mitigation?: string;
 }
 
 export interface DecisionEvent {
@@ -24,23 +49,19 @@ export interface ReplayResponse {
 }
 
 export interface CreateDecisionRequest {
-  type: string;
-  createdBy: string;
-  inputData: Record<string, any>;
+  input: string;        // V2 uses natural language input
+  createdBy?: string;   // Optional - backend gets from JWT
 }
 
 export interface UpdateDecisionRequest {
+  updatedInput?: string;
   status?: string;
-  outcome?: string;
-  riskScore?: number;
 }
 
 // ============= Extended Types for UI =============
 
 export interface DecisionExtended extends Decision {
-  outcome?: string;
-  finalizedAt?: string;
-  confidence?: number;
+  analysis?: AnalysisResponse;
   events?: DecisionEvent[];
 }
 
@@ -96,16 +117,10 @@ export interface AuditTrail {
 }
 
 // ============= Decision Status & Outcome Enums =============
+// These match the backend DecisionStatus and DecisionOutcome enums
 
-export type DecisionStatus = 'DRAFT' | 'IN_REVIEW' | 'FINALIZED';
-export type DecisionOutcome = 'APPROVED' | 'REJECTED' | 'PENDING' | 'FLAGGED';
-export type DecisionType = 
-  | 'LOAN_APPROVAL' 
-  | 'FRAUD_DETECTION' 
-  | 'CLAIM_PROCESSING' 
-  | 'PRICING_ADJUSTMENT'
-  | 'RISK_ASSESSMENT'
-  | 'CREDIT_EVALUATION';
+export type DecisionStatus = 'Draft' | 'InReview' | 'Finalized';
+export type DecisionOutcome = 'Draft' | 'Feasible' | 'RiskyButPossible' | 'NeedsAdjustment' | 'Committed';
 
 // ============= Event Types =============
 

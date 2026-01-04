@@ -7,10 +7,10 @@ export const decisionApi = {
   // Get all decisions
   async getAllDecisions(): Promise<DecisionExtended[]> {
     try {
-      const response = await apiClient.get<Decision[]>('/decisions');
+      const response = await apiClient.get<Decision[]>('/v2/decisions');
       return response.data as DecisionExtended[];
     } catch (error) {
-      console.error('Failed to fetch decisions:', error);
+      // Return empty array on error instead of throwing
       return [];
     }
   },
@@ -18,29 +18,33 @@ export const decisionApi = {
   // Get single decision by ID
   async getDecisionById(decisionId: string): Promise<DecisionExtended | null> {
     try {
-      const response = await apiClient.get<Decision>(`/decisions/${decisionId}`);
+      const response = await apiClient.get<Decision>(`/v2/decisions/${decisionId}`);
       return response.data as DecisionExtended;
     } catch (error) {
-      console.error('Failed to fetch decision:', error);
       return null;
     }
   },
 
-  // Create a new decision
+  // Create a new decision (V2 - natural language)
   async createDecision(data: CreateDecisionRequest): Promise<Decision> {
-    const response = await apiClient.post<Decision>('/decisions', data);
+    const response = await apiClient.post<Decision>('/v2/decisions', {
+      input: data.input,
+      createdBy: data.createdBy || 'current-user'  // Will be overridden by backend from JWT
+    });
     return response.data;
   },
 
-  // Update a decision
+  // Update a decision (V2)
   async updateDecision(decisionId: string, data: Partial<Decision>): Promise<Decision> {
-    const response = await apiClient.put<Decision>(`/decisions/${decisionId}`, data);
+    const response = await apiClient.put<Decision>(`/v2/decisions/${decisionId}`, {
+      updatedInput: data.naturalLanguageInput
+    });
     return response.data;
   },
 
-  // Delete a decision
+  // Delete a decision (V2)
   async deleteDecision(decisionId: string): Promise<void> {
-    await apiClient.delete(`/decisions/${decisionId}`);
+    await apiClient.delete(`/v2/decisions/${decisionId}`);
   },
 
   // ============= Replay & Events =============
@@ -91,10 +95,9 @@ export const aiApi = {
   // Generate AI analysis via backend (recommended - keeps API key secure)
   async analyzeDecision(decisionId: string): Promise<any> {
     try {
-      const response = await apiClient.post(`/decisions/${decisionId}/analyze`);
+      const response = await apiClient.post(`/v2/decisions/${decisionId}/analyze`);
       return response.data;
     } catch (error) {
-      console.error('AI analysis not available:', error);
       return {
         decisionId,
         reasoning: {
@@ -132,15 +135,14 @@ export const aiApi = {
     }
   },
 
-  // Ask a question about a specific decision (with guardrails)
+  // Ask a question about a specific decision (V2 - with guardrails)
   async askQuestion(decisionId: string, question: string): Promise<any> {
     try {
-      const response = await apiClient.post(`/decisions/${decisionId}/ask`, {
+      const response = await apiClient.post(`/v2/decisions/${decisionId}/query`, {
         question
       });
       return response.data;
     } catch (error) {
-      console.error('Failed to get answer:', error);
       return {
         response: 'Unable to get an answer at this time.',
         isError: true
