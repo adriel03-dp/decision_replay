@@ -46,11 +46,11 @@ export function Navbar() {
                 >
                   Dashboard
                 </Link>
-                <Link href="/audit" className="text-foreground/70 hover:text-foreground smooth-transition font-medium">
+                <Link
+                  href="/analytics"
+                  className="text-foreground/70 hover:text-foreground smooth-transition font-medium"
+                >
                   Analytics
-                </Link>
-                <Link href="/api/gemini" className="text-foreground/70 hover:text-foreground smooth-transition font-medium">
-                  Gemini AI
                 </Link>
               </>
             )}
@@ -63,11 +63,11 @@ export function Navbar() {
                     <span className="text-sm font-medium text-foreground">{user?.name}</span>
                   </div>
                   <Link href="/settings">
-                    <Button variant="outline" className="smooth-transition bg-transparent">
+                    <Button variant="outline" className="smooth-transition bg-transparent hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:border-amber-700 dark:hover:text-amber-200">
                       Settings
                     </Button>
                   </Link>
-                  <Button onClick={handleLogout} variant="outline" className="smooth-transition bg-transparent">
+                  <Button onClick={handleLogout} variant="outline" className="smooth-transition bg-transparent hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:border-amber-700 dark:hover:text-amber-200">
                     <LogOut className="w-4 h-4 mr-2" />
                     Logout
                   </Button>
@@ -75,7 +75,7 @@ export function Navbar() {
               ) : (
                 <>
                   <Link href="/login">
-                    <Button variant="outline" className="smooth-transition bg-transparent">
+                    <Button variant="outline" className="smooth-transition bg-transparent hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:border-amber-700 dark:hover:text-amber-200">
                       Login
                     </Button>
                   </Link>
@@ -104,34 +104,29 @@ export function Navbar() {
           <div className="md:hidden pb-4 animate-slide-down">
             <div className="flex flex-col gap-3">
               <Link href="/about">
-                <Button variant="ghost" className="w-full justify-start">
+                <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:text-amber-200">
                   About
                 </Button>
               </Link>
               {isAuthenticated && (
                 <>
                   <Link href="/decisions">
-                    <Button variant="ghost" className="w-full justify-start">
+                    <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:text-amber-200">
                       Decisions
                     </Button>
                   </Link>
                   <Link href="/decisions-dashboard">
-                    <Button variant="ghost" className="w-full justify-start">
+                    <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:text-amber-200">
                       Dashboard
                     </Button>
                   </Link>
-                  <Link href="/audit">
-                    <Button variant="ghost" className="w-full justify-start">
+                  <Link href="/analytics">
+                    <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:text-amber-200">
                       Analytics
                     </Button>
                   </Link>
-                  <Link href="/api/gemini">
-                    <Button variant="ghost" className="w-full justify-start">
-                      Gemini AI
-                    </Button>
-                  </Link>
                   <Link href="/settings">
-                    <Button variant="ghost" className="w-full justify-start">
+                    <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:text-amber-200">
                       Settings
                     </Button>
                   </Link>
@@ -144,7 +139,7 @@ export function Navbar() {
                       <UserIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
                       <span className="text-sm font-medium text-foreground">{user?.name}</span>
                     </div>
-                    <Button onClick={handleLogout} variant="outline" className="w-full smooth-transition bg-transparent">
+                    <Button onClick={handleLogout} variant="outline" className="w-full smooth-transition bg-transparent hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:border-amber-700 dark:hover:text-amber-200">
                       <LogOut className="w-4 h-4 mr-2" />
                       Logout
                     </Button>
@@ -152,7 +147,7 @@ export function Navbar() {
                 ) : (
                   <div className="flex gap-2">
                     <Link href="/login" className="flex-1">
-                      <Button variant="outline" className="w-full smooth-transition bg-transparent">
+                      <Button variant="outline" className="w-full smooth-transition bg-transparent hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:border-amber-700 dark:hover:text-amber-200">
                         Login
                       </Button>
                     </Link>
