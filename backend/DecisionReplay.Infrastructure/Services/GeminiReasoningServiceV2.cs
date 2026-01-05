@@ -30,20 +30,30 @@ namespace DecisionReplay.Infrastructure.Services;
 public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 {
     private readonly HttpClient _httpClient;
-    private readonly string? _apiKey;
-    private static readonly SemaphoreSlim _rateLimiter = new(5, 5);
+    private readonly List<string> _apiKeys;
+    private static int _currentKeyIndex = 0;
+    private static readonly object _keyRotationLock = new();
+    private static readonly SemaphoreSlim _rateLimiter = new(8, 8); // Increased for faster processing
     private static readonly Queue<DateTime> _requestTimes = new();
-    private const int MaxRequestsPerMinute = 5;
+    private const int MaxRequestsPerMinute = 8; // Increased rate limit
 
     public GeminiReasoningServiceV2(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient();
-        _apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        _apiKeys = new List<string>();
+
+        var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var key2 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_2");
+
+        if (!string.IsNullOrEmpty(key1)) _apiKeys.Add(key1);
+        if (!string.IsNullOrEmpty(key2)) _apiKeys.Add(key2);
+
+        Console.WriteLine($"[GEMINI INIT] Reasoning Service loaded {_apiKeys.Count} API key(s)");
     }
 
     public async Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionContext context, DecisionSchema? schema = null)
     {
-        if (string.IsNullOrEmpty(_apiKey))
+        if (_apiKeys.Count == 0)
         {
             return CreatePlaceholderAnalysis("AI service not configured");
         }
@@ -74,7 +84,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         DecisionContext updatedContext,
         DecisionSchema? schema = null)
     {
-        if (string.IsNullOrEmpty(_apiKey))
+        if (_apiKeys.Count == 0)
         {
             return CreatePlaceholderAnalysis("AI service not configured");
         }
@@ -98,7 +108,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 
     public async Task<string> QueryDecisionAsync(DecisionContext context, string question)
     {
-        if (string.IsNullOrEmpty(_apiKey))
+        if (_apiKeys.Count == 0)
         {
             return "AI service not configured.";
         }
@@ -186,33 +196,70 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
             ? $"Schema fields: {string.Join(", ", schema.Fields.Keys)}"
             : "No schema provided";
 
-        return $@"You are a domain-agnostic decision analysis expert. Analyze this decision and provide structured JSON output.
+        return $@"You are an expert decision analysis consultant. Analyze this decision and provide detailed, actionable feedback.
 
-DECISION CONTEXT:
+DECISION TO ANALYZE:
 Domain: {domainType}
-Natural Language Input: {context.NaturalLanguageInput}
+User's Plan: {context.NaturalLanguageInput}
 {schemaInfo}
 
-Inferred Attributes:
+Key Attributes:
 {FormatAttributes(context.InferredAttributes)}
 
-TASK:
-Provide comprehensive feasibility analysis in this JSON format:
+ANALYSIS STRUCTURE REQUIRED:
+
+PART 1: CURRENT PLAN ASSESSMENT
+Analyze the user's plan AS-IS and identify:
+- Time constraints and timeline feasibility
+- Scope definition and clarity  
+- Budget allocation and sufficiency
+- Resource requirements and availability
+- Technical challenges and dependencies
+
+PART 2: OPTIMIZATION RECOMMENDATIONS
+Provide an improved version that makes the decision 100% successful by:
+- Adjusting timeline for realistic delivery
+- Clarifying scope for better execution
+- Optimizing budget distribution
+- Ensuring adequate resources
+- Addressing technical risks
+
+Return analysis in this EXACT JSON format:
 {{
-  ""feasibilityScore"": <0-100 number>,
+  ""feasibilityScore"": <0-100 number for CURRENT plan>,
   ""feasibilityVerdict"": ""FEASIBLE|RISKY_BUT_POSSIBLE|NEEDS_ADJUSTMENT|NOT_FEASIBLE"",
-  ""executiveSummary"": ""2-3 sentence summary"",
-  ""pros"": [""benefit 1"", ""benefit 2"", ...],
-  ""cons"": [""concern 1"", ""concern 2"", ...],
+  ""executiveSummary"": ""Overall assessment in 2-3 sentences"",
+  ""currentPlanAnalysis"": {{
+    ""timelineAssessment"": ""Analysis of proposed timeline"",
+    ""scopeAssessment"": ""Analysis of project scope"",
+    ""budgetAssessment"": ""Analysis of budget allocation"",
+    ""resourceAssessment"": ""Analysis of team/resource requirements""
+  }},
+  ""pros"": [""Current plan strengths"", ""What works well"", ""Positive aspects""],
+  ""cons"": [""Current plan weaknesses"", ""Critical gaps"", ""Risk areas""],
+  ""optimizedSolution"": {{
+    ""improvedTimeline"": ""Realistic timeline recommendation"",
+    ""clarifiedScope"": ""Refined scope definition"",
+    ""budgetOptimization"": ""Better budget allocation"",
+    ""resourceStrategy"": ""Optimal resource plan"",
+    ""successProbability"": <0-100 improved success rate>
+  }},
+  ""optimizedPros"": [""Benefits of optimized approach"", ""Success enablers"", ""Competitive advantages""],
+  ""optimizedCons"": [""Trade-offs in optimized plan"", ""Remaining challenges"", ""Constraints to manage""],
   ""risks"": [
-    {{""description"": ""risk"", ""impact"": ""HIGH|MEDIUM|LOW"", ""mitigation"": ""how to address""}}
+    {{""description"": ""specific risk"", ""impact"": ""HIGH|MEDIUM|LOW"", ""mitigation"": ""concrete action to address""}}
   ],
-  ""assumptions"": [""assumption 1"", ""assumption 2"", ...],
-  ""recommendations"": [""actionable recommendation 1"", ...],
-  ""confidenceLevel"": <0.0-1.0 number>
+  ""assumptions"": [""Key assumptions in analysis"", ""Dependencies identified""],
+  ""recommendations"": [""Specific actionable steps"", ""Priority actions"", ""Success factors""],
+  ""confidenceLevel"": <0.0-1.0 confidence in analysis>
 }}
 
-Be honest, specific, and actionable. Focus on feasibility given the provided context.";
+REQUIREMENTS:
+- Be specific and actionable in all recommendations
+- Focus on Time/Scope/Budget as primary decision factors
+- Provide realistic success probability improvements
+- Ensure the optimized solution addresses current plan weaknesses
+- Make recommendations that enable 100% project success";
     }
 
     private string BuildReplayAnalysisPrompt(DecisionContext original, DecisionContext updated, DecisionSchema? schema)
@@ -272,28 +319,65 @@ ANSWER (decision-scoped only):";
             contents = new[] { new { parts = new[] { new { text = prompt } } } },
             generationConfig = new
             {
-                temperature = 0.7,
-                maxOutputTokens = 2048
+                temperature = 0.3,  // Lower for more consistent JSON structure
+                maxOutputTokens = 8192  // Maximum possible tokens for complete detailed analysis
             }
         };
 
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        // Use gemini-2.5-flash for fastest responses
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
 
-        var response = await _httpClient.PostAsync(url, content);
+        Exception? lastException = null;
 
-        if (!response.IsSuccessStatusCode)
+        for (int attempt = 0; attempt < _apiKeys.Count; attempt++)
         {
-            var error = await response.Content.ReadAsStringAsync();
-            var userFriendlyMessage = GetUserFriendlyErrorMessage(response.StatusCode, error);
-            throw new Exception(userFriendlyMessage);
+            var apiKey = GetCurrentApiKey();
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
+
+            Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{_currentKeyIndex + 1}");
+
+            try
+            {
+                var response = await _httpClient.PostAsync(url, content);
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[GEMINI] Full API response: {responseJson}");
+                    var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+                    var analysisText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+                    Console.WriteLine($"[GEMINI] Extracted analysis text: {analysisText}");
+                    return analysisText;
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1}: {response.StatusCode}");
+                    Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
+
+                    lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
+
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.Unauthorized)
+                    {
+                        RotateApiKey();
+                        Console.WriteLine($"[GEMINI] Rotated to key #{_currentKeyIndex + 1}");
+                    }
+                    else
+                    {
+                        throw lastException;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1} exception: {ex.Message}");
+                lastException = ex;
+                RotateApiKey();
+            }
         }
 
-        var responseJson = await response.Content.ReadAsStringAsync();
-        var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
-        return geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+        Console.WriteLine($"[GEMINI ERROR] All {_apiKeys.Count} API keys exhausted");
+        throw lastException ?? new Exception("All API keys failed");
     }
 
     private string GetUserFriendlyErrorMessage(HttpStatusCode statusCode, string error)
@@ -325,6 +409,9 @@ ANSWER (decision-scoped only):";
                     PropertyNameCaseInsensitive = true
                 });
 
+                Console.WriteLine($"[GEMINI] Extracted analysis text:");
+                Console.WriteLine($"[GEMINI] Parsed JSON fields: FeasibilityScore={parsed?.FeasibilityScore}, Verdict={parsed?.FeasibilityVerdict}, Pros={parsed?.Pros?.Count}, Cons={parsed?.Cons?.Count}, Risks={parsed?.Risks?.Count}");
+
                 if (parsed != null)
                 {
                     return new DecisionAnalysis(
@@ -342,7 +429,24 @@ ANSWER (decision-scoped only):";
                         parsed.Recommendations ?? new List<string>(),
                         parsed.ConfidenceLevel,
                         "gemini-pro"
-                    );
+                    )
+                    {
+                        CurrentPlanAnalysis = parsed.CurrentPlanAnalysis != null ? new CurrentPlanAnalysis(
+                            parsed.CurrentPlanAnalysis.TimelineAssessment ?? "",
+                            parsed.CurrentPlanAnalysis.ScopeAssessment ?? "",
+                            parsed.CurrentPlanAnalysis.BudgetAssessment ?? "",
+                            parsed.CurrentPlanAnalysis.ResourceAssessment ?? ""
+                        ) : null,
+                        OptimizedSolution = parsed.OptimizedSolution != null ? new OptimizedSolution(
+                            parsed.OptimizedSolution.ImprovedTimeline ?? "",
+                            parsed.OptimizedSolution.ClarifiedScope ?? "",
+                            parsed.OptimizedSolution.BudgetOptimization ?? "",
+                            parsed.OptimizedSolution.ResourceStrategy ?? "",
+                            parsed.OptimizedSolution.SuccessProbability
+                        ) : null,
+                        OptimizedPros = parsed.OptimizedPros ?? new List<string>(),
+                        OptimizedCons = parsed.OptimizedCons ?? new List<string>()
+                    };
                 }
             }
         }
@@ -401,18 +505,55 @@ ANSWER (decision-scoped only):";
         }
     }
 
+    private string GetCurrentApiKey()
+    {
+        lock (_keyRotationLock)
+        {
+            return _apiKeys[_currentKeyIndex];
+        }
+    }
+
+    private void RotateApiKey()
+    {
+        lock (_keyRotationLock)
+        {
+            _currentKeyIndex = (_currentKeyIndex + 1) % _apiKeys.Count;
+        }
+    }
+
     // DTOs for deserialization
     private class AnalysisDto
     {
         public double FeasibilityScore { get; set; }
         public string? FeasibilityVerdict { get; set; }
         public string? ExecutiveSummary { get; set; }
+        public CurrentPlanAnalysisDto? CurrentPlanAnalysis { get; set; }
         public List<string>? Pros { get; set; }
         public List<string>? Cons { get; set; }
+        public OptimizedSolutionDto? OptimizedSolution { get; set; }
+        public List<string>? OptimizedPros { get; set; }
+        public List<string>? OptimizedCons { get; set; }
         public List<RiskDto>? Risks { get; set; }
         public List<string>? Assumptions { get; set; }
         public List<string>? Recommendations { get; set; }
         public double ConfidenceLevel { get; set; }
+    }
+
+    private class CurrentPlanAnalysisDto
+    {
+        public string? TimelineAssessment { get; set; }
+        public string? ScopeAssessment { get; set; }
+        public string? BudgetAssessment { get; set; }
+        public string? ResourceAssessment { get; set; }
+    }
+
+    private class OptimizedSolutionDto
+    {
+        public string? ImprovedTimeline { get; set; }
+        public string? ClarifiedScope { get; set; }
+        public string? BudgetOptimization { get; set; }
+        public string? ResourceStrategy { get; set; }
+        public double SuccessProbability { get; set; }
     }
 
     private class RiskDto

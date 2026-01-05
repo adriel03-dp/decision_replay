@@ -26,12 +26,22 @@ namespace DecisionReplay.Infrastructure.Services;
 public class GeminiIntentParser : IIntentParser
 {
     private readonly HttpClient _httpClient;
-    private readonly string? _apiKey;
+    private readonly List<string> _apiKeys;
+    private static int _currentKeyIndex = 0;
+    private static readonly object _keyRotationLock = new();
 
     public GeminiIntentParser(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient();
-        _apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        _apiKeys = new List<string>();
+
+        var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        var key2 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_2");
+
+        if (!string.IsNullOrEmpty(key1)) _apiKeys.Add(key1);
+        if (!string.IsNullOrEmpty(key2)) _apiKeys.Add(key2);
+
+        Console.WriteLine($"[GEMINI INIT] Intent Parser loaded {_apiKeys.Count} API key(s)");
     }
 
     public async Task<DecisionContext> ParseInputAsync(string naturalLanguageInput, string userId)
@@ -41,7 +51,7 @@ public class GeminiIntentParser : IIntentParser
 
         var inferredAttributes = new Dictionary<string, object>();
 
-        if (string.IsNullOrEmpty(_apiKey))
+        if (_apiKeys.Count == 0)
         {
             // Fallback: Basic parsing without AI
             inferredAttributes["domain"] = "Unknown";
@@ -90,7 +100,7 @@ public class GeminiIntentParser : IIntentParser
 
         var fields = new Dictionary<string, string>();
 
-        if (string.IsNullOrEmpty(_apiKey))
+        if (_apiKeys.Count == 0)
         {
             // Fallback schema
             fields["input"] = "Original user input";
@@ -122,21 +132,45 @@ public class GeminiIntentParser : IIntentParser
 
     private string BuildIntentParsingPrompt(string input)
     {
-        return $@"You are an intent parser for a decision analysis system. 
-Analyze this user input and extract key information in JSON format:
+        return $@"You are a decision analysis expert. Analyze this input and extract KEY decision factors in JSON.
+
+CRITICAL: Extract Time, Scope, and Budget as primary decision factors.
 
 User Input: ""{input}""
 
-Extract and return JSON with:
+Return EXACT JSON format:
 {{
-  ""domain"": ""<DomainType>"",  // e.g., SoftwareDevelopment, Construction, Logistics, PersonalPlanning
+  ""domain"": ""<DomainType>"",
   ""intent"": ""<What user wants to decide>"",
-  ""timeline"": ""<Any time-related info>"",
-  ""resources"": ""<Team, budget, tools mentioned>"",
-  ""constraints"": ""<Limitations, risks, dependencies>"",
-  ""assumptions"": [""<List of implicit assumptions>""],
-  ""keywords"": [""<Important keywords>""]
+  ""timelineInfo"": {{
+    ""duration"": ""<Extracted time period>"",
+    ""deadline"": ""<Any specific deadline>"",
+    ""urgency"": ""HIGH|MEDIUM|LOW"",
+    ""timeConstraints"": ""<Time-related limitations>""
+  }},
+  ""scopeInfo"": {{
+    ""objectives"": ""<Main goals/deliverables>"",
+    ""boundaries"": ""<What's included/excluded>"",
+    ""complexity"": ""HIGH|MEDIUM|LOW"",
+    ""deliverables"": [""<List of expected outputs>""]
+  }},
+  ""budgetInfo"": {{
+    ""amount"": ""<Budget amount if specified>"",
+    ""currency"": ""<Currency if specified>"",
+    ""constraints"": ""<Budget limitations>"",
+    ""costFactors"": [""<Main cost drivers>""]
+  }},
+  ""resourceInfo"": {{
+    ""team"": ""<Team size/composition>"",
+    ""skills"": [""<Required skills>""],
+    ""tools"": [""<Technology/tools needed>""],
+    ""dependencies"": [""<External dependencies>""]
+  }},
+  ""riskFactors"": [""<Potential risks/challenges>""],
+  ""successCriteria"": [""<How success will be measured>""]
 }}
+
+Focus on extracting concrete Time/Scope/Budget details for accurate feasibility analysis.
 
 Only extract what's explicitly mentioned or clearly implied. Use ""Not specified"" for missing info.";
     }
@@ -177,25 +211,56 @@ Provide 5-8 relevant fields for {domain}.";
 
         var json = JsonSerializer.Serialize(requestBody);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
-        // Use gemini-2.5-flash for fastest responses
-        var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={_apiKey}";
 
-        Console.WriteLine($"[GEMINI] Making request to: {url.Replace(_apiKey!, "***API_KEY***")}");
-        Console.WriteLine($"[GEMINI] Request body length: {json.Length} characters");
-        
-        var response = await _httpClient.PostAsync(url, content);
-        Console.WriteLine($"[GEMINI] Response status: {response.StatusCode}");
+        Exception? lastException = null;
 
-        if (!response.IsSuccessStatusCode)
+        for (int attempt = 0; attempt < _apiKeys.Count; attempt++)
         {
-            var error = await response.Content.ReadAsStringAsync();
-            var userFriendlyMessage = GetUserFriendlyErrorMessage(response.StatusCode, error);
-            throw new Exception(userFriendlyMessage);
+            var apiKey = GetCurrentApiKey();
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
+
+            Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{_currentKeyIndex + 1}");
+
+            try
+            {
+                var response = await _httpClient.PostAsync(url, content);
+                Console.WriteLine($"[GEMINI] Response status: {response.StatusCode}");
+
+                if (response.IsSuccessStatusCode)
+                {
+                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+                    return geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+                }
+                else
+                {
+                    var error = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1}: {response.StatusCode}");
+                    Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
+
+                    lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
+
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.Unauthorized)
+                    {
+                        RotateApiKey();
+                        Console.WriteLine($"[GEMINI] Rotated to key #{_currentKeyIndex + 1}");
+                    }
+                    else
+                    {
+                        throw lastException;
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1} exception: {ex.Message}");
+                lastException = ex;
+                RotateApiKey();
+            }
         }
 
-        var responseJson = await response.Content.ReadAsStringAsync();
-        var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
-        return geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+        Console.WriteLine($"[GEMINI ERROR] All {_apiKeys.Count} API keys exhausted");
+        throw lastException ?? new Exception("All API keys failed");
     }
 
     private string GetUserFriendlyErrorMessage(HttpStatusCode statusCode, string error)
@@ -284,6 +349,22 @@ Provide 5-8 relevant fields for {domain}.";
         }
 
         return result;
+    }
+
+    private string GetCurrentApiKey()
+    {
+        lock (_keyRotationLock)
+        {
+            return _apiKeys[_currentKeyIndex];
+        }
+    }
+
+    private void RotateApiKey()
+    {
+        lock (_keyRotationLock)
+        {
+            _currentKeyIndex = (_currentKeyIndex + 1) % _apiKeys.Count;
+        }
     }
 
     private class GeminiResponse
