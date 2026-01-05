@@ -81,8 +81,8 @@ export default function AuditModePage({ params }: { params: Promise<{ id: string
               <p className="text-sm font-mono text-foreground mt-2">{currentDecision.id}</p>
             </div>
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Type</p>
-              <p className="text-sm font-medium text-foreground mt-2">{currentDecision.type}</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Domain</p>
+              <p className="text-sm font-medium text-foreground mt-2">{currentDecision.domainType || 'General'}</p>
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground uppercase">Status</p>
@@ -99,8 +99,8 @@ export default function AuditModePage({ params }: { params: Promise<{ id: string
               </div>
             </div>
             <div>
-              <p className="text-xs font-semibold text-muted-foreground uppercase">Risk Score</p>
-              <p className="text-lg font-bold text-foreground mt-2">{currentDecision.riskScore}</p>
+              <p className="text-xs font-semibold text-muted-foreground uppercase">Feasibility</p>
+              <p className="text-lg font-bold text-foreground mt-2">{currentDecision.analysis?.feasibilityScore ? `${Math.round(currentDecision.analysis.feasibilityScore)}%` : 'N/A'}</p>
             </div>
           </div>
         </Card>
