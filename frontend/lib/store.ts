@@ -1,8 +1,8 @@
 import { create } from "zustand"
-import type { Decision, DecisionEvent } from "./types"
+import type { DecisionExtended, DecisionEvent } from "./api-types"
 
 interface DecisionStore {
-  currentDecision: Decision | null
+  currentDecision: DecisionExtended | null
   currentEventIndex: number
   events: DecisionEvent[]
   isPlaying: boolean
@@ -14,7 +14,7 @@ interface DecisionStore {
   searchId: string
 
   // Actions
-  setCurrentDecision: (decision: Decision, events: DecisionEvent[]) => void
+  setCurrentDecision: (decision: DecisionExtended, events: DecisionEvent[]) => void
   setCurrentEventIndex: (index: number) => void
   setIsPlaying: (playing: boolean) => void
   setStatusFilter: (statuses: string[]) => void

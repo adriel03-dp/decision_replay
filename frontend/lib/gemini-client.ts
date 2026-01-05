@@ -117,14 +117,13 @@ export async function generateFactorAnalysis(decision: any): Promise<string> {
   const client = getGeminiClient()
   
   if (!client) {
-    // Wait for rate limit slot
-    await rateLimiter.waitForSlot()
-    console.log(`Gemini API call - Remaining requests: ${rateLimiter.getRemainingRequests()}`)
-    
     return "Factor analysis is not available. Please configure the GEMINI_API_KEY environment variable."
   }
 
   try {
+    // Wait for rate limit slot
+    await rateLimiter.waitForSlot()
+    
     const model = client.getGenerativeModel({ model: "gemini-pro" })
 
     const prompt = `As an AI decision analyst, provide detailed analysis of factor influences on this decision:
