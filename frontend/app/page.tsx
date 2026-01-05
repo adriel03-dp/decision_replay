@@ -15,23 +15,24 @@ export default function HomePage() {
             <div className="space-y-4">
               <div className="inline-block">
                 <span className="text-sm font-semibold text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-900/30 px-3 py-1 rounded-full">
-                  Planning Decision Intelligence
+                  AI-Powered Decision Intelligence
                 </span>
               </div>
               <h1 className="text-5xl md:text-6xl font-bold leading-tight">
-                Make Smarter <span className="gradient-text">Planning Decisions</span>
+                Make Better Decisions with <span className="gradient-text">AI Reasoning</span>
               </h1>
               <p className="text-lg text-foreground/70 max-w-xl">
-                Submit your project plans, get AI-powered feasibility analysis, and learn from past decisions. 
-                Built for product and project decision-makers who need data-driven insights.
+                Submit any decision in natural language—project plans, resource allocation, timelines, budgets—and get 
+                instant AI-powered feasibility analysis. See what could go wrong before you commit. Replay decisions 
+                with updated constraints to explore "what-if" scenarios.
               </p>
             </div>
 
             {/* CTA Buttons */}
             <div className="flex flex-col sm:flex-row gap-4">
-              <Link href="/login">
+              <Link href="/signup">
                 <Button className="gradient-button w-full sm:w-auto group">
-                  Get Started
+                  Get Started Free
                   <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 smooth-transition" />
                 </Button>
               </Link>
@@ -49,11 +50,19 @@ export default function HomePage() {
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium">AI Feasibility Analysis</span>
+                <span className="text-sm font-medium">Structured AI Analysis</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-medium">Decision Replay Engine</span>
               </div>
               <div className="flex items-center gap-3">
                 <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium">Learn from History</span>
+                <span className="text-sm font-medium">Risk Identification</span>
+              </div>
+              <div className="flex items-center gap-3">
+                <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
+                <span className="text-sm font-medium">Any Domain Supported</span>
               </div>
             </div>
           </div>
@@ -78,31 +87,31 @@ export default function HomePage() {
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center mb-16 slide-up">
-          <h2 className="text-4xl font-bold mb-4">Powerful Features</h2>
+          <h2 className="text-4xl font-bold mb-4">How Decision Replay Works</h2>
           <p className="text-foreground/70 text-lg max-w-2xl mx-auto">
-            Everything you need to plan better, analyze feasibility, and learn from your decisions
+            AI-powered decision intelligence that helps you understand feasibility, identify risks, and explore alternatives
           </p>
         </div>
 
         <div className="grid md:grid-cols-3 gap-8">
           {[
             {
-              icon: TrendingUp,
-              title: "Feasibility Analysis",
+              icon: CheckCircle2,
+              title: "Natural Language Input",
               description:
-                "AI analyzes your plans for timeline realism, resource gaps, and constraint conflicts with actionable suggestions",
+                "Describe your decision in plain English—no forms, no rigid fields. Just tell us what you're trying to decide.",
+            },
+            {
+              icon: TrendingUp,
+              title: "AI Feasibility Analysis",
+              description:
+                "Gemini AI analyzes feasibility, identifies risks, evaluates constraints, and provides structured pros/cons/recommendations.",
             },
             {
               icon: Shield,
-              title: "Decision History",
+              title: "Decision Replay",
               description:
-                "Review past planning decisions to see what worked, what didn't, and why. Learn from experience.",
-            },
-            {
-              icon: CheckCircle2,
-              title: "Visual Insights",
-              description:
-                "Charts showing resource allocation, timeline risks, and constraint analysis help you spot issues early",
+                "Change your constraints (timeline, budget, resources) and instantly see how those changes impact feasibility and outcomes.",
             },
           ].map((feature, i) => (
             <div
@@ -120,13 +129,14 @@ export default function HomePage() {
       {/* CTA Section */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="p-12 rounded-3xl bg-gradient-to-br from-green-50 to-white dark:from-slate-900 dark:to-slate-950 border border-green-200 dark:border-slate-800 text-center slide-up">
-          <h2 className="text-4xl font-bold mb-4">Ready to Plan Smarter?</h2>
+          <h2 className="text-4xl font-bold mb-4">Ready to Make Better Decisions?</h2>
           <p className="text-foreground/70 text-lg mb-8 max-w-2xl mx-auto">
-            Join product and project teams using Decision Replay to validate plans, identify risks, and make better decisions.
+            Join teams using Decision Replay to validate plans, explore alternatives, and understand risks before committing. 
+            Create a free account and submit your first decision.
           </p>
           <Link href="/signup">
             <Button className="gradient-button group">
-              Start Your Free Trial
+              Get Started Free
               <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 smooth-transition" />
             </Button>
           </Link>
