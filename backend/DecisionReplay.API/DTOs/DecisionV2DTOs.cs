@@ -44,7 +44,8 @@ public record AnalysisResponse(
     List<string> Recommendations,
     double ConfidenceLevel,
     DateTime GeneratedAt,
-    string ModelUsed
+    string ModelUsed,
+    ChartDataResponse? ChartData
 );
 
 public record CurrentPlanAnalysisResponse(
@@ -99,6 +100,38 @@ public record ChangeResponse(
     string? NewValue,
     bool IsSignificant,
     string ChangeType
+);
+
+/// <summary>
+/// Chart data for frontend visualization
+/// </summary>
+public record ChartDataResponse(
+    List<FeasibilityTimelineData> Timeline,
+    List<ResourceAllocationData> Performance,
+    List<PlanningFactorData> RiskHeatmap
+);
+
+public record FeasibilityTimelineData(
+    string Time,
+    double FeasibilityScore,
+    double TimelinePressure,
+    double ResourceAdequacy,
+    double ScopeComplexity
+);
+
+public record ResourceAllocationData(
+    string Resource,
+    double Allocated,
+    double Required,
+    double Gap
+);
+
+public record PlanningFactorData(
+    string Factor,
+    double Impact,
+    string Status,
+    string Trend,
+    string? Description
 );
 
 /// <summary>
