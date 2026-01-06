@@ -22,9 +22,11 @@ public class GeminiRateLimitMiddleware
     private readonly RequestDelegate _next;
     private readonly ILogger<GeminiRateLimitMiddleware> _logger;
 
-    // Rate limit configuration
-    private const int MaxRequestsPerMinute = 7;
-    private const int MaxRequestsPerDay = 450;
+    // Rate limit configuration - Gemini API Free Tier Limits
+    // Free tier: 15 RPM, 1,500 RPD, 32,000 per month
+    // Setting slightly lower to leave buffer for safety
+    private const int MaxRequestsPerMinute = 10;  // Conservative: 10/15 RPM
+    private const int MaxRequestsPerDay = 1000;   // Conservative: 1000/1500 RPD
     private const int RateLimitWindowMinutes = 1;
     private const int RateLimitWindowDays = 1;
 
