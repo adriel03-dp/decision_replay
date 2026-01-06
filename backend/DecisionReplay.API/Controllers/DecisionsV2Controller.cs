@@ -44,15 +44,18 @@ public class DecisionsV2Controller : ControllerBase
 {
     private readonly DecisionServiceV2 _service;
     private readonly IDecisionV2Repository _repository;
+    private readonly IInputValidationService _validationService;
     private readonly ILogger<DecisionsV2Controller> _logger;
 
     public DecisionsV2Controller(
         DecisionServiceV2 service,
         IDecisionV2Repository repository,
+        IInputValidationService validationService,
         ILogger<DecisionsV2Controller> logger)
     {
         _service = service ?? throw new ArgumentNullException(nameof(service));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
+        _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
@@ -73,14 +76,29 @@ public class DecisionsV2Controller : ControllerBase
             return BadRequest(new { error = "Input cannot be empty. Provide a natural language description of your decision." });
         }
 
+        // Validate input content and detect domain
+        var validationResult = _validationService.ValidateInput(request.Input);
+        if (!validationResult.IsValid)
+        {
+            _logger.LogWarning("Input validation failed for user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
+            return BadRequest(new { error = validationResult.ErrorMessage });
+        }
+
         try
         {
             var userId = User.Identity?.Name ?? request.CreatedBy;
-            _logger.LogInformation("Creating decision for user {User}", userId);
+            _logger.LogInformation("Creating decision for user {User} in domain: {Domain}", userId, validationResult.DomainType);
+
+            // Use sanitized input for decision creation
+            var sanitizedInput = validationResult.SanitizedInput ?? request.Input;
 
             // Create decision (parses intent, generates schema)
             _logger.LogInformation("Step 1: Calling CreateDecisionAsync...");
-            var decision = await _service.CreateDecisionAsync(request.Input, userId);
+            var decision = await _service.CreateDecisionAsync(sanitizedInput, userId);
+
+            // Store detected domain type in the decision
+            decision.DomainType = validationResult.DomainType;
+
             _logger.LogInformation("Step 2: Decision object created, saving to MongoDB...");
 
             await _repository.CreateAsync(decision);
@@ -159,7 +177,7 @@ public class DecisionsV2Controller : ControllerBase
     public async Task<ActionResult<DecisionV2Response>> GetById(Guid id)
     {
         _logger.LogInformation("Fetching decision {DecisionId} for user {User}", id, User.Identity?.Name);
-        
+
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
         {
@@ -168,15 +186,143 @@ public class DecisionsV2Controller : ControllerBase
         }
 
         _logger.LogInformation("Decision {DecisionId} found, Context is {IsNull}", id, decision.Context == null ? "NULL" : "NOT NULL");
-        
+
         if (decision.Context == null)
         {
-            _logger.LogError("Decision {DecisionId} has NULL Context! CreatedBy: {CreatedBy}, Status: {Status}", 
+            _logger.LogError("Decision {DecisionId} has NULL Context! CreatedBy: {CreatedBy}, Status: {Status}",
                 id, decision.CreatedBy, decision.Status);
             return StatusCode(500, new { error = "Decision data is corrupted (null context)" });
         }
 
         return Ok(decision.ToResponse());
+    }
+
+    /// <summary>
+    /// Temporary analysis without saving decision
+    /// POST /api/v2/decisions/analyze-temp
+    /// </summary>
+    [HttpPost("analyze-temp")]
+    [ProducesResponseType(typeof(object), 200)]
+    [ProducesResponseType(typeof(object), 400)]
+    [ProducesResponseType(typeof(object), 500)]
+    public async Task<ActionResult<object>> AnalyzeTemporary([FromBody] NaturalLanguageDecisionRequest request)
+    {
+        if (string.IsNullOrWhiteSpace(request.Input))
+        {
+            _logger.LogWarning("Temporary analysis failed: empty input from user {User}", User.Identity?.Name);
+            return BadRequest(new { error = "Input cannot be empty. Provide a natural language description of your decision." });
+        }
+
+        // Validate input content and detect domain
+        var validationResult = _validationService.ValidateInput(request.Input);
+        if (!validationResult.IsValid)
+        {
+            _logger.LogWarning("Input validation failed for temporary analysis, user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
+            return BadRequest(new { error = validationResult.ErrorMessage });
+        }
+
+        try
+        {
+            var userId = User.Identity?.Name ?? request.CreatedBy;
+            _logger.LogInformation("Creating temporary analysis for user {User} in domain: {Domain}", userId, validationResult.DomainType);
+
+            // Use sanitized input for analysis
+            var sanitizedInput = validationResult.SanitizedInput ?? request.Input;
+
+            // Create decision without saving to database
+            var decision = await _service.CreateDecisionAsync(sanitizedInput, userId);
+
+            // Generate analysis without persisting
+            if (decision.Analysis != null)
+            {
+                _logger.LogInformation("Temporary analysis completed for user {User}", userId);
+
+                // Log what we're about to return for debugging
+                _logger.LogInformation("Analysis data: Score={Score}, Pros={ProsCount}, Cons={ConsCount}, Risks={RisksCount}, Recommendations={RecommendationsCount}",
+                    decision.Analysis.FeasibilityScore,
+                    decision.Analysis.Pros?.Count ?? 0,
+                    decision.Analysis.Cons?.Count ?? 0,
+                    decision.Analysis.Risks?.Count ?? 0,
+                    decision.Analysis.Recommendations?.Count ?? 0);
+
+                // Return the complete analysis data structure
+                return Ok(new
+                {
+                    // Basic metrics
+                    feasibilityScore = decision.Analysis.FeasibilityScore,
+                    feasibilityVerdict = decision.Analysis.FeasibilityVerdict,
+                    confidence = decision.Analysis.ConfidenceLevel,
+                    domainType = validationResult.DomainType,
+
+                    // Main content
+                    executiveSummary = decision.Analysis.ExecutiveSummary,
+                    reasoning = decision.Analysis.ExecutiveSummary, // Keep for backward compatibility
+
+                    // Analysis sections
+                    currentPlanAnalysis = decision.Analysis.CurrentPlanAnalysis != null ? new
+                    {
+                        timelineAssessment = decision.Analysis.CurrentPlanAnalysis.TimelineAssessment,
+                        scopeAssessment = decision.Analysis.CurrentPlanAnalysis.ScopeAssessment,
+                        budgetAssessment = decision.Analysis.CurrentPlanAnalysis.BudgetAssessment,
+                        resourceAssessment = decision.Analysis.CurrentPlanAnalysis.ResourceAssessment
+                    } : null,
+
+                    // Pros and Cons
+                    pros = decision.Analysis.Pros ?? new List<string>(),
+                    cons = decision.Analysis.Cons ?? new List<string>(),
+
+                    // Optimized solution
+                    optimizedSolution = decision.Analysis.OptimizedSolution != null ? new
+                    {
+                        improvedTimeline = decision.Analysis.OptimizedSolution.ImprovedTimeline,
+                        clarifiedScope = decision.Analysis.OptimizedSolution.ClarifiedScope,
+                        budgetOptimization = decision.Analysis.OptimizedSolution.BudgetOptimization,
+                        resourceStrategy = decision.Analysis.OptimizedSolution.ResourceStrategy,
+                        successProbability = decision.Analysis.OptimizedSolution.SuccessProbability
+                    } : null,
+
+                    optimizedPros = decision.Analysis.OptimizedPros ?? new List<string>(),
+                    optimizedCons = decision.Analysis.OptimizedCons ?? new List<string>(),
+
+                    // Risks with full detail
+                    risks = decision.Analysis.Risks?.Select(r => new
+                    {
+                        description = r.Description,
+                        impact = r.Impact,
+                        mitigation = r.Mitigation
+                    }) ?? Enumerable.Empty<object>(),
+
+                    // Additional data
+                    assumptions = decision.Analysis.Assumptions ?? new List<string>(),
+                    recommendations = decision.Analysis.Recommendations ?? new List<string>(),
+
+                    // Metadata
+                    timestamp = DateTime.UtcNow,
+                    modelUsed = decision.Analysis.ModelUsed ?? "Gemini-2.5-Flash"
+                });
+            }
+            else
+            {
+                return Ok(new
+                {
+                    reasoning = "Analysis completed successfully. The decision context has been parsed and evaluated.",
+                    domainType = validationResult.DomainType,
+                    timestamp = DateTime.UtcNow
+                });
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to create temporary analysis for user {User}. Error: {Error}", User.Identity?.Name, ex.ToString());
+
+            var userMessage = GetUserFriendlyErrorMessage(ex);
+            return StatusCode(500, new
+            {
+                error = "Unable to analyze decision",
+                message = userMessage,
+                canRetry = true
+            });
+        }
     }
 
     /// <summary>
