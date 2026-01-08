@@ -72,25 +72,17 @@ builder.Services.AddScoped<IDecisionV2Repository, DecisionV2Repository>();
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 
 // V1 Services (Legacy - keeping for backward compatibility)
-builder.Services.AddScoped<IAIReasoningService, GeminiReasoningService>();
+// Register V2 services only (V1 disabled to avoid static resource conflicts)
 builder.Services.AddScoped<IAuthService, AuthService>();
-builder.Services.AddScoped<DecisionService>();
+// V2 Services only (V1 removed to eliminate conflicts)
 
 // V2 Services (Refactored - Domain-Agnostic Architecture)
 // SOLID: Dependency Inversion - Register interfaces with implementations
 
 // Configure HttpClient with optimized timeout for Gemini API calls
-builder.Services.AddHttpClient<GeminiIntentParser>()
-    .ConfigureHttpClient(client =>
-    {
-        client.Timeout = TimeSpan.FromSeconds(8); // Reduced for faster responses
-    });
+builder.Services.AddHttpClient<GeminiIntentParser>();
 
-builder.Services.AddHttpClient<GeminiReasoningServiceV2>()
-    .ConfigureHttpClient(client =>
-    {
-        client.Timeout = TimeSpan.FromSeconds(12); // Reduced for faster analysis
-    });
+builder.Services.AddHttpClient<GeminiReasoningServiceV2>();
 
 builder.Services.AddScoped<IIntentParser, GeminiIntentParser>();
 builder.Services.AddScoped<IAIReasoningServiceV2, GeminiReasoningServiceV2>();
@@ -178,6 +170,7 @@ app.UseResponseCaching();
 // Rate Limiting Middleware (must be after authentication)
 app.UseMiddleware<GeminiRateLimitMiddleware>();
 
+// Configure routing (V1 disabled - frontend uses V2 only)
 app.MapControllers();
 
 // FORCE CLEAR corrupted collections on startup due to GUID serialization issues
