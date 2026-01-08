@@ -13,45 +13,70 @@ export default function DecisionsDashboard() {
   const [selectedFilter, setSelectedFilter] = useState<"all" | "approved" | "rejected" | "pending">("all")
 
   useEffect(() => {
+    let mounted = true
+    
     // Fetch real decisions from API
     async function fetchDecisions() {
       try {
         const response = await apiClient.get('/decisions')
-        setDecisions(response.data)
+        if (mounted) {
+          setDecisions(response.data || [])
+        }
       } catch (error) {
         console.error('Failed to fetch decisions:', error)
+        if (mounted) {
+          // Set empty array as fallback
+          setDecisions([])
+        }
       } finally {
-        setLoading(false)
+        if (mounted) {
+          setLoading(false)
+        }
       }
     }
+    
     fetchDecisions()
+    
+    return () => {
+      mounted = false
+    }
   }, [])
 
   const filteredDecisions = decisions.filter((d) => {
     if (selectedFilter === "all") return true
-    return d.outcome?.toLowerCase() === selectedFilter
+    
+    // Handle case insensitive filtering with null checks
+    const outcome = d.outcome?.toLowerCase()?.trim()
+    const filter = selectedFilter.toLowerCase().trim()
+    
+    return outcome === filter
   })
 
   const stats = {
     total: decisions.length,
-    approved: decisions.filter((d) => d.outcome === "Approved").length,
-    rejected: decisions.filter((d) => d.outcome === "Rejected").length,
-    pending: decisions.filter((d) => d.outcome === "Pending").length,
+    approved: decisions.filter((d) => d.outcome === "Approved" || d.outcome === "approved").length,
+    rejected: decisions.filter((d) => d.outcome === "Rejected" || d.outcome === "rejected").length,
+    pending: decisions.filter((d) => d.outcome === "Pending" || d.outcome === "pending").length,
     avgConfidence: decisions.length > 0 
-      ? Math.round(decisions.reduce((sum, d) => sum + (d.confidence || 0), 0) / decisions.length)
+      ? Math.round(decisions.reduce((sum, d) => {
+          const confidence = typeof d.confidence === 'number' ? d.confidence : 0
+          return sum + confidence
+        }, 0) / decisions.length)
       : 0,
   }
 
   const getOutcomeIcon = (outcome: string) => {
-    switch (outcome) {
-      case "Approved":
+    const normalizedOutcome = outcome?.toLowerCase()?.trim()
+    
+    switch (normalizedOutcome) {
+      case "approved":
         return <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-      case "Rejected":
+      case "rejected":
         return <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-      case "Pending":
+      case "pending":
         return <Clock className="w-5 h-5 text-yellow-600 dark:text-yellow-400" />
       default:
-        return null
+        return <Clock className="w-5 h-5 text-gray-600 dark:text-gray-400" />
     }
   }
 
