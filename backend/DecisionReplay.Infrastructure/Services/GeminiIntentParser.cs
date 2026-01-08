@@ -27,19 +27,22 @@ public class GeminiIntentParser : IIntentParser
 {
     private readonly HttpClient _httpClient;
     private readonly List<string> _apiKeys;
-    private static int _currentKeyIndex = 0;
-    private static readonly object _keyRotationLock = new();
+    private int _currentKeyIndex = 0;  // Instance-based, not static
+    private readonly object _keyRotationLock = new();  // Instance-based lock
 
     public GeminiIntentParser(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient();
+        _httpClient.Timeout = TimeSpan.FromSeconds(45); // Increased timeout for reliability
         _apiKeys = new List<string>();
 
         var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
         var key2 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_2");
+        var key3 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_3");
 
         if (!string.IsNullOrEmpty(key1)) _apiKeys.Add(key1);
         if (!string.IsNullOrEmpty(key2)) _apiKeys.Add(key2);
+        if (!string.IsNullOrEmpty(key3)) _apiKeys.Add(key3);
 
         Console.WriteLine($"[GEMINI INIT] Intent Parser loaded {_apiKeys.Count} API key(s)");
     }
@@ -240,10 +243,15 @@ Provide 5-8 relevant fields for {domain}.";
 
                     lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
 
-                    if (response.StatusCode == HttpStatusCode.TooManyRequests || response.StatusCode == HttpStatusCode.Unauthorized)
+                    // Always rotate key on error to try next one  
+                    if (response.StatusCode == HttpStatusCode.TooManyRequests ||
+                        response.StatusCode == HttpStatusCode.Unauthorized ||
+                        response.StatusCode == HttpStatusCode.ServiceUnavailable ||
+                        response.StatusCode == HttpStatusCode.InternalServerError)
                     {
                         RotateApiKey();
-                        Console.WriteLine($"[GEMINI] Rotated to key #{_currentKeyIndex + 1}");
+                        Console.WriteLine($"[GEMINI] Rotated to key #{_currentKeyIndex + 1} due to {response.StatusCode}");
+                        continue; // Try next key
                     }
                     else
                     {
