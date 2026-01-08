@@ -17,15 +17,15 @@ public class DecisionService
         _aiService = aiService;
     }
 
-    public async Task<Decision> CreateDecisionAsync(string type, string createdBy)
+    public async Task<Decision> CreateDecisionAsync(string title, string scope, string timeline, string resources, string constraints, string createdBy)
     {
-        var decision = new Decision(type, createdBy);
+        var decision = new Decision(title, scope, timeline, resources, constraints, createdBy);
         await _repository.CreateAsync(decision);
 
         var inputEvent = new DecisionEvent(
             decision.Id,
-            DecisionEventType.InputCaptured,
-            new { type, createdBy });
+            DecisionEventType.DecisionCreated,
+            new { title, scope, timeline, resources, constraints, createdBy });
 
         await _repository.AppendEventAsync(inputEvent);
 
@@ -41,7 +41,7 @@ public class DecisionService
 
         var aiEvent = new DecisionEvent(
             decision.Id,
-            DecisionEventType.AIReasoningGenerated,
+            DecisionEventType.FeasibilityGenerated,
             reasoning);
 
         await _repository.AppendEventAsync(aiEvent);
