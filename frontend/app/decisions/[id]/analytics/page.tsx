@@ -32,13 +32,26 @@ export default function DecisionAnalyticsPage() {
       })
 
       if (!response.ok) {
-        throw new Error('Failed to fetch analytics')
+        if (response.status === 404) {
+          // Analytics not found, redirect to analysis page to generate them
+          router.push(`/decisions/${decisionId}/analysis`)
+          return
+        }
+        throw new Error(`Failed to fetch analytics: ${response.status}`)
       }
 
       const data = await response.json()
+      
+      // Validate the data structure
+      if (!data.decision || !data.analytics) {
+        throw new Error('Invalid analytics data structure')
+      }
+      
       setDecision(data.decision)
       setAnalytics(data.analytics)
     } catch (error) {
+      console.error('Analytics fetch error:', error)
+      // Redirect to analysis page as fallback
       router.push(`/decisions/${decisionId}/analysis`)
     } finally {
       setLoading(false)
@@ -62,20 +75,29 @@ export default function DecisionAnalyticsPage() {
     return null
   }
 
-  // Prepare cost breakdown chart data
-  const costData = analytics.costBreakdown ? Object.entries(analytics.costBreakdown).map(([name, value]) => ({
-    name: name.replace(/_/g, ' '),
-    value: typeof value === 'number' ? value : 0
-  })) : []
+  // Prepare cost breakdown chart data with validation
+  const costData = analytics.costBreakdown ? Object.entries(analytics.costBreakdown)
+    .filter(([_, value]) => typeof value === 'number' && value > 0)
+    .map(([name, value]) => ({
+      name: name.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      value: typeof value === 'number' ? Math.round(value * 100) / 100 : 0
+    })) : []
 
-  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444']
+  const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6', '#f97316']
 
-  // Timeline progress data
-  const timelineData = analytics.timeline ? analytics.timeline.map((phase: any, idx: number) => ({
-    name: phase.name,
-    progress: ((idx + 1) / analytics.timeline.length) * 100,
-    duration: parseInt(phase.duration) || 25
-  })) : []
+  // Timeline progress data with validation
+  const timelineData = analytics.timeline ? analytics.timeline
+    .filter((phase: any) => phase && phase.name)
+    .map((phase: any, idx: number, arr: any[]) => {
+      const progressPercentage = ((idx + 1) / arr.length) * 100
+      const durationValue = phase.duration ? parseInt(phase.duration.toString()) : 25
+      
+      return {
+        name: phase.name.trim(),
+        progress: Math.round(progressPercentage * 100) / 100,
+        duration: Math.max(1, isNaN(durationValue) ? 25 : durationValue)
+      }
+    }) : []
 
   return (
     <main className="min-h-screen bg-gradient-to-br from-white to-green-50 dark:from-slate-950 dark:to-slate-900">
