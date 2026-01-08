@@ -16,21 +16,64 @@ export default function ComparisonPage({ params }: { params: Promise<{ id: strin
   const { currentDecision } = useDecisionStore()
 
   useEffect(() => {
+    let mounted = true
+    
     setIsClient(true)
-    params.then((p) => setId(p.id))
+    params.then((p) => {
+      if (mounted) setId(p.id)
+    })
+    
+    return () => {
+      mounted = false
+    }
   }, [params])
 
   if (!isClient || !currentDecision) {
     return <div className="min-h-screen bg-background" />
   }
 
-  // Find AI reasoning event
-  const aiEvent = useDecisionStore.getState().events.find((e) => e.eventType === "AI_REASONING")
+  // Find AI reasoning event with validation
+  const events = useDecisionStore.getState().events
+  const aiEvent = events.find((e) => e.eventType === "AI_REASONING")
   const aiReasoning = aiEvent?.payload
 
-  const aiConfidence = aiReasoning?.confidence || 0
-  const aiOutcome = currentDecision.outcome
-  const humanOverride = useDecisionStore.getState().events.find((e) => e.eventType === "HUMAN_OVERRIDE")
+  const aiConfidence = typeof aiReasoning?.confidence === 'number' ? aiReasoning.confidence : 0
+  const aiOutcome = currentDecision.outcome || 'Unknown'
+  const humanOverride = events.find((e) => e.eventType === "HUMAN_OVERRIDE")
+  
+  // Check if we have enough data to show comparison
+  const hasComparisonData = aiEvent || humanOverride
+  
+  if (!hasComparisonData) {
+    return (
+      <main className="min-h-screen bg-background">
+        <div className="bg-card border-b border-border">
+          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
+            <Link href={`/decisions/${currentDecision.id}`}>
+              <Button variant="ghost" size="sm">
+                <ChevronLeft className="w-4 h-4 mr-2" />
+                Back
+              </Button>
+            </Link>
+            <h1 className="text-2xl font-bold text-foreground">AI vs Human Comparison</h1>
+          </div>
+        </div>
+        <div className="max-w-7xl mx-auto px-6 py-6">
+          <Card className="p-8 text-center">
+            <h2 className="text-xl font-semibold mb-4">No Comparison Data Available</h2>
+            <p className="text-muted-foreground mb-4">
+              This decision doesn't have AI reasoning or human override data to compare.
+            </p>
+            <Link href={`/decisions/${currentDecision.id}/analysis`}>
+              <Button>
+                Generate Analysis
+              </Button>
+            </Link>
+          </Card>
+        </div>
+      </main>
+    )
+  }
 
   return (
     <main className="min-h-screen bg-background">
