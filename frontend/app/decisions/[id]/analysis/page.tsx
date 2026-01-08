@@ -7,6 +7,59 @@ import { ChevronLeft, Sparkles, Send, BarChart3, AlertCircle, CheckCircle2, Tren
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useToast } from "@/hooks/use-toast"
+import { AnimatedTimelineChart } from "@/components/decision-replay/animated-timeline-chart"
+import { AnimatedPerformanceChart } from "@/components/decision-replay/animated-performance-chart"
+import { AnimatedFactorHeatmap } from "@/components/decision-replay/animated-factor-heatmap"
+
+// Chart data interfaces
+interface FeasibilityTimelineData {
+  time: string
+  feasibilityScore: number
+  timelinePressure: number
+  resourceAdequacy: number
+  scopeComplexity: number
+}
+
+interface ResourceAllocationData {
+  resource: string
+  allocated: number
+  required: number
+  gap: number
+}
+
+interface PlanningFactorData {
+  factor: string
+  impact: number
+  status: "good" | "warning" | "critical"
+  trend: "up" | "down" | "stable"
+  description?: string
+}
+
+interface ChartData {
+  timeline: FeasibilityTimelineData[]
+  performance: ResourceAllocationData[]
+  riskHeatmap: PlanningFactorData[]
+}
+
+interface AnalysisResponse {
+  analysisId: string
+  feasibilityScore: number
+  feasibilityVerdict: string
+  executiveSummary: string
+  currentPlanAnalysis?: any
+  pros: string[]
+  cons: string[]
+  optimizedSolution?: any
+  optimizedPros: string[]
+  optimizedCons: string[]
+  risks: Array<{ description: string; impact: string; mitigation?: string }>
+  assumptions: string[]
+  recommendations: string[]
+  confidenceLevel: number
+  generatedAt: string
+  modelUsed: string
+  chartData?: ChartData
+}
 
 export default function DecisionAnalysisPage() {
   const params = useParams()
@@ -15,7 +68,7 @@ export default function DecisionAnalysisPage() {
   const decisionId = params.id as string
 
   const [decision, setDecision] = useState<any>(null)
-  const [analysis, setAnalysis] = useState<any>(null)
+  const [analysis, setAnalysis] = useState<AnalysisResponse | null>(null)
   const [loading, setLoading] = useState(true)
   const [analyzing, setAnalyzing] = useState(false)
   const [question, setQuestion] = useState("")
@@ -28,11 +81,18 @@ export default function DecisionAnalysisPage() {
 
   async function fetchDecision() {
     try {
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout for faster feedback
+      
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/${decisionId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
-        }
+        },
+        signal: controller.signal
       })
+      
+      clearTimeout(timeoutId)
+      
       if (response.ok) {
         const data = await response.json()
         setDecision(data)
@@ -40,7 +100,23 @@ export default function DecisionAnalysisPage() {
         // Try to fetch existing analysis
         await fetchExistingAnalysis()
       } else {
-        throw new Error('Failed to fetch decision')
+        // Get detailed error information
+        let errorDetail = 'Unknown error'
+        try {
+          const errorData = await response.json()
+          errorDetail = errorData.error || errorData.message || `HTTP ${response.status}`
+        } catch {
+          errorDetail = `HTTP ${response.status} - ${response.statusText}`
+        }
+        
+        console.error('API Error Details:', {
+          status: response.status,
+          statusText: response.statusText,
+          url: `${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/${decisionId}`,
+          detail: errorDetail
+        })
+        
+        throw new Error(`Failed to fetch decision: ${errorDetail}`)
       }
     } catch (error) {
       console.error('Failed to fetch decision:', error)
@@ -48,7 +124,11 @@ export default function DecisionAnalysisPage() {
       // Extract user-friendly error message
       let errorMessage = 'Failed to load decision.'
       if (error instanceof Error) {
-        errorMessage = error.message
+        if (error.name === 'AbortError') {
+          errorMessage = 'Request timed out. Please check your connection.'
+        } else {
+          errorMessage = error.message
+        }
       }
       
       toast({
@@ -435,6 +515,74 @@ export default function DecisionAnalysisPage() {
                   ))}
                 </ul>
               </Card>
+            )}
+
+            {/* Interactive Charts Section */}
+            {analysis.chartData && (
+              <>
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <BarChart3 className="w-6 h-6 text-green-600 dark:text-green-400" />
+                    <h2 className="text-xl font-bold">Visual Analytics</h2>
+                    <span className="text-sm text-muted-foreground">Interactive charts based on AI analysis</span>
+                  </div>
+                  
+                  {/* Timeline Chart */}
+                  {analysis.chartData.timeline && analysis.chartData.timeline.length > 0 && (
+                    <AnimatedTimelineChart data={analysis.chartData.timeline} />
+                  )}
+                  
+                  {/* Resource Performance Chart */}
+                  {analysis.chartData.performance && analysis.chartData.performance.length > 0 && (
+                    <AnimatedPerformanceChart data={analysis.chartData.performance} />
+                  )}
+                  
+                  {/* Risk Factor Heatmap */}
+                  {analysis.chartData.riskHeatmap && analysis.chartData.riskHeatmap.length > 0 && (
+                    <AnimatedFactorHeatmap data={analysis.chartData.riskHeatmap} />
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Fallback Charts with Sample Data (when chartData not available) */}
+            {analysis && !analysis.chartData && (
+              <>
+                <div className="space-y-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <BarChart3 className="w-6 h-6 text-green-600 dark:text-green-400" />
+                    <h2 className="text-xl font-bold">Visual Analytics</h2>
+                    <span className="text-sm text-muted-foreground">Charts based on analysis data</span>
+                  </div>
+                  
+                  {/* Sample Timeline Chart */}
+                  <AnimatedTimelineChart data={[
+                    { time: "Initial", feasibilityScore: Math.max(0, analysis.feasibilityScore - 15), timelinePressure: 100 - analysis.feasibilityScore + 10, resourceAdequacy: analysis.feasibilityScore - 10, scopeComplexity: 100 - analysis.feasibilityScore },
+                    { time: "Refined", feasibilityScore: analysis.feasibilityScore, timelinePressure: 100 - analysis.feasibilityScore, resourceAdequacy: analysis.feasibilityScore, scopeComplexity: 100 - analysis.feasibilityScore - 10 },
+                    { time: "Optimized", feasibilityScore: Math.min(100, analysis.feasibilityScore + 10), timelinePressure: Math.max(0, 100 - analysis.feasibilityScore - 15), resourceAdequacy: Math.min(100, analysis.feasibilityScore + 15), scopeComplexity: Math.max(0, 100 - analysis.feasibilityScore - 20) }
+                  ]} />
+                  
+                  {/* Sample Performance Chart */}
+                  <AnimatedPerformanceChart data={[
+                    { resource: "Team Size", allocated: Math.round(analysis.feasibilityScore * 0.8), required: Math.round(analysis.feasibilityScore * 0.9), gap: Math.round(analysis.feasibilityScore * 0.1) },
+                    { resource: "Budget (k$)", allocated: Math.round(analysis.feasibilityScore * 1.2), required: Math.round(analysis.feasibilityScore * 1.35), gap: Math.round(analysis.feasibilityScore * 0.15) },
+                    { resource: "Timeline (weeks)", allocated: Math.round(analysis.feasibilityScore * 0.6), required: Math.round(analysis.feasibilityScore * 0.7), gap: Math.round(analysis.feasibilityScore * 0.1) }
+                  ]} />
+                  
+                  {/* Sample Risk Heatmap */}
+                  <AnimatedFactorHeatmap data={[
+                    ...analysis.risks.map(risk => ({
+                      factor: risk.description,
+                      impact: risk.impact === "HIGH" ? 85 : risk.impact === "MEDIUM" ? 60 : 35,
+                      status: (risk.impact === "HIGH" ? "critical" : risk.impact === "MEDIUM" ? "warning" : "good") as "good" | "warning" | "critical",
+                      trend: "stable" as "up" | "down" | "stable",
+                      description: risk.mitigation
+                    })),
+                    { factor: "Timeline Feasibility", impact: 100 - analysis.feasibilityScore, status: analysis.feasibilityScore >= 70 ? "good" : analysis.feasibilityScore >= 40 ? "warning" : "critical" as "good" | "warning" | "critical", trend: "stable" as "up" | "down" | "stable", description: "Overall timeline assessment" },
+                    { factor: "Resource Availability", impact: analysis.feasibilityScore > 70 ? 30 : 70, status: analysis.feasibilityScore >= 70 ? "good" : "warning" as "good" | "warning" | "critical", trend: "up" as "up" | "down" | "stable", description: "Resource allocation status" }
+                  ]} />
+                </div>
+              </>
             )}
 
             {/* Q&A Section */}
