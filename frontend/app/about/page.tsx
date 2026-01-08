@@ -32,7 +32,7 @@ export default function AboutPage() {
             </p>
             <p className="text-lg text-foreground/70 mb-8">
               Decision Replay provides AI-assisted feasibility analysis for your planning decisions. Submit your project plans 
-              (scope, timeline, resources, constraints) and get actionable insights on risks, bottlenecks, and alternatives. 
+              (scope, timeline, resources, constraints) and get actionable insights on risks, bottlenecks and alternatives. 
               Learn from past decisions to improve future planning.
             </p>
             <Link href="/signup">
@@ -99,21 +99,38 @@ export default function AboutPage() {
       {/* Story Section */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="slide-up">
-          <h2 className="text-4xl font-bold mb-8">Our Story</h2>
+          <h2 className="text-4xl font-bold mb-8">About This Project</h2>
           <div className="space-y-6 text-lg text-foreground/70">
             <p>
-              Decision Replay was founded by product and engineering leaders who experienced the pain of failed projects 
-              due to unrealistic planning. We saw teams commit to timelines that were clearly too aggressive, allocate 
-              resources that were obviously insufficient, or overlook constraints that were right in front of them.
+              <strong>Decision Replay</strong> is a portfolio project created by <strong>Adriel Perera</strong>, 
+              a Software Engineering undergraduate passionate about building production-ready systems that demonstrate 
+              real-world software architecture principles.
             </p>
             <p>
-              We decided to build a platform that would bring structured AI analysis to human planning decisions. Not to 
-              replace human judgment, but to augment it. A tool that asks the tough questions: Is this timeline realistic? 
-              Do we have enough resources? What could go wrong?
+              This project was built to showcase mastery of <strong>.NET Core</strong>, <strong>Clean Architecture</strong>, 
+              <strong>SOLID principles</strong> and <strong>AI integration</strong> using Google's Gemini API. 
+              The system uses advanced AI reasoning to analyze decision feasibility, identify risks, and provide 
+              structured recommendations—going beyond simple prompting to deliver actionable intelligence.
             </p>
             <p>
-              Today, Decision Replay helps product teams, project managers, and startup founders validate their plans, 
-              identify risks early, and learn from past decisions. We're building a better way to plan.
+              <strong>Why Decision Replay?</strong> Most decision-making tools are domain-specific and rigid. 
+              This platform accepts natural language input and works across any domain which includes software projects, construction 
+              planning, logistics, personal decisions, making it a truly generalized decision reasoning engine.
+            </p>
+            <p>
+              The core innovation is the <strong>Decision Replay</strong> feature: users can update their constraints 
+              (timeline, budget, resources) and instantly see how those changes impact feasibility. It's like a 
+              time machine for decision-making, helping users explore "what-if" scenarios before committing.
+            </p>
+            <p>
+              <strong>Target Users:</strong> Anyone making constrained decisions:project managers validating timelines, 
+              founders planning product launches, team leads assessing resource allocation or individuals navigating 
+              complex personal decisions. If your decision has constraints, this tool helps you understand what's realistic.
+            </p>
+            <p>
+              <strong>Technical Highlights:</strong> Domain-agnostic architecture, intent parsing system, dynamic schema 
+              generation, structured AI analysis with pros/cons/risks, decision replay engine, chart-agnostic visualization 
+              data, and production-ready rate limiting and error handling.
             </p>
           </div>
         </div>
@@ -122,9 +139,10 @@ export default function AboutPage() {
       {/* CTA Section */}
       <section className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="p-12 rounded-3xl bg-gradient-to-br from-green-50 to-white dark:from-slate-900 dark:to-slate-950 border border-green-200 dark:border-slate-800 text-center slide-up">
-          <h2 className="text-4xl font-bold mb-4">Ready to Plan Smarter?</h2>
+          <h2 className="text-4xl font-bold mb-4">Ready to Experience Decision Intelligence?</h2>
           <p className="text-foreground/70 text-lg mb-8">
-            Get AI-powered feasibility analysis for your planning decisions. Start making better decisions today.
+            Create an account and submit your first decision for AI-powered feasibility analysis. 
+            See how changing constraints impacts outcomes with Decision Replay.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center">
             <Link href="/signup">
@@ -133,12 +151,12 @@ export default function AboutPage() {
                 <ArrowRight className="w-4 h-4 ml-2 group-hover:translate-x-1 smooth-transition" />
               </Button>
             </Link>
-            <Link href="/decisions">
+            <Link href="/login">
               <Button
                 variant="outline"
                 className="bg-white/50 dark:bg-slate-800/50 backdrop-blur border-green-200 dark:border-slate-700"
               >
-                View Demo
+                Sign In
               </Button>
             </Link>
           </div>
