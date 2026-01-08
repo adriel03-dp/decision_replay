@@ -8,35 +8,120 @@ import { OutcomeBadge } from "@/components/decision-replay/outcome-badge"
 import { ConfidenceIndicator } from "@/components/decision-replay/confidence-indicator"
 import { FactorBar } from "@/components/decision-replay/factor-bar"
 import { useDecisionStore } from "@/lib/store"
-import { useEffect, useState } from "react"
+import { useToast } from "@/hooks/use-toast"
+import { useEffect, useState, useRef } from "react"
 
 export default function AuditModePage({ params }: { params: Promise<{ id: string }> }) {
   const [id, setId] = useState<string>("")
   const [isClient, setIsClient] = useState(false)
+  const [exporting, setExporting] = useState(false)
   const { currentDecision } = useDecisionStore()
+  const { toast } = useToast()
+  const auditRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
+    let mounted = true
     setIsClient(true)
-    params.then((p) => setId(p.id))
+    params.then((p) => {
+      if (mounted) setId(p.id)
+    })
+    
+    return () => {
+      mounted = false
+    }
   }, [params])
 
   const handleExportJSON = () => {
-    const data = {
-      decision: currentDecision,
-      events: useDecisionStore.getState().events,
-      exportedAt: new Date().toISOString(),
+    try {
+      if (!currentDecision) {
+        toast({
+          title: "Export Failed",
+          description: "No decision data available for export.",
+          variant: "destructive"
+        })
+        return
+      }
+      
+      const data = {
+        decision: currentDecision,
+        events: useDecisionStore.getState().events,
+        exportedAt: new Date().toISOString(),
+      }
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
+      const url = URL.createObjectURL(blob)
+      const a = document.createElement("a")
+      a.href = url
+      a.download = `decision-${currentDecision.id}-audit.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      
+      toast({
+        title: "Decision Replay - Export Successful",
+        description: "Audit data exported as JSON.",
+        variant: "default"
+      })
+    } catch (error) {
+      console.error('JSON export failed:', error)
+      toast({
+        title: "Decision Replay Alert",
+        description: "Failed to export audit data.",
+        variant: "destructive"
+      })
     }
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" })
-    const url = URL.createObjectURL(blob)
-    const a = document.createElement("a")
-    a.href = url
-    a.download = `decision-${currentDecision?.id}-audit.json`
-    a.click()
-    URL.revokeObjectURL(url)
   }
 
-  const handleExportPDF = () => {
-    alert("PDF export would be implemented with a PDF library like jsPDF or pdfkit")
+  const handleExportPDF = async () => {
+    if (!currentDecision || !auditRef.current) {
+      toast({
+        title: "Decision Replay Alert",
+        description: "No audit data available for PDF export.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    setExporting(true)
+    try {
+      // Dynamic import to avoid SSR issues
+      const { default: html2canvas } = await import('html2canvas')
+      const { jsPDF } = await import('jspdf')
+      
+      const element = auditRef.current
+      const canvas = await html2canvas(element, {
+        scale: 1.5,
+        useCORS: true,
+        allowTaint: true,
+        backgroundColor: '#ffffff'
+      })
+      
+      const imgData = canvas.toDataURL('image/png')
+      const pdf = new jsPDF('p', 'mm', 'a4')
+      const pdfWidth = pdf.internal.pageSize.getWidth()
+      const pdfHeight = pdf.internal.pageSize.getHeight()
+      const imgWidth = canvas.width
+      const imgHeight = canvas.height
+      const ratio = Math.min(pdfWidth / imgWidth, pdfHeight / imgHeight)
+      const imgX = (pdfWidth - imgWidth * ratio) / 2
+      const imgY = 30
+      
+      pdf.addImage(imgData, 'PNG', imgX, imgY, imgWidth * ratio, imgHeight * ratio)
+      pdf.save(`decision-${currentDecision.id}-audit.pdf`)
+      
+      toast({
+        title: "Decision Replay - Export Successful",
+        description: "Audit exported as PDF.",
+        variant: "default"
+      })
+    } catch (error) {
+      console.error('PDF export failed:', error)
+      toast({
+        title: "Decision Replay Alert",
+        description: "Failed to export PDF. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setExporting(false)
+    }
   }
 
   if (!isClient || !currentDecision) {
@@ -64,15 +149,15 @@ export default function AuditModePage({ params }: { params: Promise<{ id: string
               <Download className="w-4 h-4 mr-2" />
               Export JSON
             </Button>
-            <Button onClick={handleExportPDF} variant="outline" size="sm">
+            <Button onClick={handleExportPDF} variant="outline" size="sm" disabled={exporting}>
               <Download className="w-4 h-4 mr-2" />
-              Export PDF
+              {exporting ? "Exporting..." : "Export PDF"}
             </Button>
           </div>
         </div>
       </div>
 
-      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6">
+      <div className="max-w-7xl mx-auto px-6 py-6 space-y-6" ref={auditRef}>
         {/* Decision Summary */}
         <Card className="p-6 bg-card border border-border">
           <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
