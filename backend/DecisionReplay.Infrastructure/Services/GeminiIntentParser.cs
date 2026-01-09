@@ -27,8 +27,8 @@ public class GeminiIntentParser : IIntentParser
 {
     private readonly HttpClient _httpClient;
     private readonly List<string> _apiKeys;
-    private int _currentKeyIndex = 0;  // Instance-based, not static
-    private readonly object _keyRotationLock = new();  // Instance-based lock
+    private static int _globalCurrentKeyIndex = 0;  // Shared across all instances
+    private static readonly object _globalKeyRotationLock = new();  // Shared lock
 
     public GeminiIntentParser(IHttpClientFactory httpClientFactory)
     {
@@ -222,7 +222,7 @@ Provide 5-8 relevant fields for {domain}.";
             var apiKey = GetCurrentApiKey();
             var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
 
-            Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{_currentKeyIndex + 1}");
+            Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{_globalCurrentKeyIndex + 1}");
 
             try
             {
@@ -238,7 +238,7 @@ Provide 5-8 relevant fields for {domain}.";
                 else
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1}: {response.StatusCode}");
+                    Console.WriteLine($"[GEMINI ERROR] Key #{_globalCurrentKeyIndex + 1}: {response.StatusCode}");
                     Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
 
                     lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
@@ -250,7 +250,7 @@ Provide 5-8 relevant fields for {domain}.";
                         response.StatusCode == HttpStatusCode.InternalServerError)
                     {
                         RotateApiKey();
-                        Console.WriteLine($"[GEMINI] Rotated to key #{_currentKeyIndex + 1} due to {response.StatusCode}");
+                        Console.WriteLine($"[GEMINI] Rotated to key #{_globalCurrentKeyIndex + 1} due to {response.StatusCode}");
                         continue; // Try next key
                     }
                     else
@@ -261,7 +261,7 @@ Provide 5-8 relevant fields for {domain}.";
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1} exception: {ex.Message}");
+                Console.WriteLine($"[GEMINI ERROR] Key #{_globalCurrentKeyIndex + 1} exception: {ex.Message}");
                 lastException = ex;
                 RotateApiKey();
             }
@@ -361,17 +361,17 @@ Provide 5-8 relevant fields for {domain}.";
 
     private string GetCurrentApiKey()
     {
-        lock (_keyRotationLock)
+        lock (_globalKeyRotationLock)
         {
-            return _apiKeys[_currentKeyIndex];
+            return _apiKeys[_globalCurrentKeyIndex];
         }
     }
 
     private void RotateApiKey()
     {
-        lock (_keyRotationLock)
+        lock (_globalKeyRotationLock)
         {
-            _currentKeyIndex = (_currentKeyIndex + 1) % _apiKeys.Count;
+            _globalCurrentKeyIndex = (_globalCurrentKeyIndex + 1) % _apiKeys.Count;
         }
     }
 

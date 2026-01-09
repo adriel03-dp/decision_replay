@@ -3,6 +3,7 @@ using DecisionReplay.Domain.ValueObjects;
 using DecisionReplay.Domain.Entities;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Net;
 
 namespace DecisionReplay.Infrastructure.Services;
@@ -31,9 +32,12 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 {
     private readonly HttpClient _httpClient;
     private readonly List<string> _apiKeys;
-    private int _currentKeyIndex = 0;  // Instance-based, not static
-    private readonly object _keyRotationLock = new();  // Instance-based lock
+    private static int _globalCurrentKeyIndex = 0;  // Shared across all instances
+    private static readonly object _globalKeyRotationLock = new();  // Shared lock
     private readonly SemaphoreSlim _rateLimiter = new(8, 8); // Instance-based rate limiter
+    // Limit concurrent requests across all service instances to avoid hammering the API
+    private static readonly SemaphoreSlim _globalConcurrencyLimiter = new SemaphoreSlim(4, 4);
+    private readonly List<KeyState> _apiKeyStates = new();
     private readonly Queue<DateTime> _requestTimes = new(); // Instance-based request tracking
     private const int MaxRequestsPerMinute = 15; // Match API key limit
 
@@ -50,6 +54,12 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         if (!string.IsNullOrEmpty(key1)) _apiKeys.Add(key1);
         if (!string.IsNullOrEmpty(key2)) _apiKeys.Add(key2);
         if (!string.IsNullOrEmpty(key3)) _apiKeys.Add(key3);
+
+        // Initialize per-key state
+        foreach (var k in _apiKeys)
+        {
+            _apiKeyStates.Add(new KeyState { ApiKey = k });
+        }
 
         Console.WriteLine($"[GEMINI INIT] Reasoning Service loaded {_apiKeys.Count} API key(s)");
     }
@@ -323,68 +333,108 @@ ANSWER (decision-scoped only):";
 
         Exception? lastException = null;
 
-        for (int attempt = 0; attempt < _apiKeys.Count; attempt++)
+        // Limit concurrency across instances
+        await _globalConcurrencyLimiter.WaitAsync();
+        try
         {
-            var apiKey = GetCurrentApiKey();
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
-
-            Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{_currentKeyIndex + 1}");
-
-            try
+            // Try up to number of keys attempts but pick only available keys (not in cooldown)
+            for (int attempt = 0; attempt < _apiKeys.Count; attempt++)
             {
-                // Add small delay between attempts to avoid hammering
-                if (attempt > 0)
+                var keyIndex = await GetAvailableKeyIndexAsync();
+                if (keyIndex < 0)
                 {
-                    var delay = TimeSpan.FromMilliseconds(500 * attempt); // Progressive delay
-                    await Task.Delay(delay);
-                    Console.WriteLine($"[GEMINI] Waited {delay.TotalMilliseconds}ms before retry");
+                    // No key available right now - wait a short randomized interval then retry
+                    var waitMs = 250 + (new Random()).Next(0, 500);
+                    Console.WriteLine($"[GEMINI] No available API key, waiting {waitMs}ms before retry");
+                    await Task.Delay(waitMs);
+                    continue;
                 }
 
-                var response = await _httpClient.PostAsync(url, content);
+                var apiKey = _apiKeys[keyIndex];
+                var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
 
-                if (response.IsSuccessStatusCode)
+                Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{keyIndex + 1}");
+
+                try
                 {
-                    var responseJson = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[GEMINI] Full API response: {responseJson}");
-                    var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
-                    var analysisText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
-                    Console.WriteLine($"[GEMINI] Extracted analysis text: {analysisText}");
-                    return analysisText;
-                }
-                else
-                {
-                    var error = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1}: {response.StatusCode}");
-                    Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
-
-                    lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
-
-                    // Always rotate key on error to try next one
-                    if (response.StatusCode == HttpStatusCode.TooManyRequests ||
-                        response.StatusCode == HttpStatusCode.Unauthorized ||
-                        response.StatusCode == HttpStatusCode.ServiceUnavailable ||
-                        response.StatusCode == HttpStatusCode.InternalServerError)
+                    // Backoff with jitter between retries
+                    if (attempt > 0)
                     {
-                        RotateApiKey();
-                        Console.WriteLine($"[GEMINI] Rotated to key #{_currentKeyIndex + 1} due to {response.StatusCode}");
-                        continue; // Try next key
+                        var baseDelay = 200 * Math.Pow(2, attempt - 1);
+                        var jitter = new Random().Next(0, 200);
+                        var delay = TimeSpan.FromMilliseconds(baseDelay + jitter);
+                        await Task.Delay(delay);
+                        Console.WriteLine($"[GEMINI] Waited {delay.TotalMilliseconds}ms before retry");
+                    }
+
+                    // Create fresh content per attempt (do not reuse HttpContent across requests)
+                    using var contentLocal = new StringContent(json, Encoding.UTF8, "application/json");
+
+                    // Record that we're attempting a request with this key (counts toward per-minute quota)
+                    RecordKeyRequest(keyIndex);
+
+                    // Log masked key to verify which key is used (do not log full key)
+                    var masked = apiKey != null && apiKey.Length > 6 ? $"****{apiKey.Substring(apiKey.Length - 6)}" : apiKey;
+                    Console.WriteLine($"[GEMINI] Sending request with key {masked}, payload size={contentLocal.Headers.ContentLength}");
+
+                    var response = await _httpClient.PostAsync(url, contentLocal);
+
+                    if (response.IsSuccessStatusCode)
+                    {
+                        var responseJson = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"[GEMINI] Full API response: {responseJson}");
+                        var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
+                        var analysisText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+                        Console.WriteLine($"[GEMINI] Extracted analysis text: {analysisText}");
+                        // Mark key as healthy and record this request
+                        MarkKeyHealthy(keyIndex);
+                        RecordKeyRequest(keyIndex);
+                        return analysisText;
                     }
                     else
                     {
-                        throw lastException;
+                        var error = await response.Content.ReadAsStringAsync();
+                        Console.WriteLine($"[GEMINI ERROR] Key #{keyIndex + 1}: {response.StatusCode}");
+                        Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
+
+                        lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
+
+                        if (response.StatusCode == HttpStatusCode.TooManyRequests ||
+                            response.StatusCode == HttpStatusCode.ServiceUnavailable)
+                        {
+                            // Put key into cooldown with exponential backoff
+                            SetKeyCooldown(keyIndex);
+                            Console.WriteLine($"[GEMINI] Key #{keyIndex + 1} placed into cooldown");
+                            continue; // Try next available key
+                        }
+                        else if (response.StatusCode == HttpStatusCode.Unauthorized)
+                        {
+                            // Unauthorized - mark key dead for a long period
+                            SetKeyCooldown(keyIndex, TimeSpan.FromHours(1));
+                            Console.WriteLine($"[GEMINI] Key #{keyIndex + 1} unauthorized - disabled temporarily");
+                            continue;
+                        }
+                        else
+                        {
+                            throw lastException;
+                        }
                     }
                 }
+                catch (Exception ex)
+                {
+                    Console.WriteLine($"[GEMINI ERROR] Key #{keyIndex + 1} exception: {ex.Message}");
+                    lastException = ex;
+                    SetKeyCooldown(keyIndex);
+                }
             }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[GEMINI ERROR] Key #{_currentKeyIndex + 1} exception: {ex.Message}");
-                lastException = ex;
-                RotateApiKey();
-            }
-        }
 
-        Console.WriteLine($"[GEMINI ERROR] All {_apiKeys.Count} API keys exhausted");
-        throw lastException ?? new Exception("All API keys failed");
+            Console.WriteLine($"[GEMINI ERROR] All {_apiKeys.Count} API keys exhausted or temporarily unavailable");
+            throw lastException ?? new Exception("All API keys failed");
+        }
+        finally
+        {
+            _globalConcurrencyLimiter.Release();
+        }
     }
 
     private string GetUserFriendlyErrorMessage(HttpStatusCode statusCode, string error)
@@ -419,7 +469,6 @@ ANSWER (decision-scoped only):";
                 var options = new JsonSerializerOptions
                 {
                     PropertyNameCaseInsensitive = true,
-                    PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
                     AllowTrailingCommas = true
                 };
 
@@ -534,59 +583,177 @@ ANSWER (decision-scoped only):";
 
     private string GetCurrentApiKey()
     {
-        lock (_keyRotationLock)
+        lock (_globalKeyRotationLock)
         {
-            return _apiKeys[_currentKeyIndex];
+            return _apiKeys[_globalCurrentKeyIndex];
         }
     }
 
     private void RotateApiKey()
     {
-        lock (_keyRotationLock)
+        lock (_globalKeyRotationLock)
         {
-            _currentKeyIndex = (_currentKeyIndex + 1) % _apiKeys.Count;
+            _globalCurrentKeyIndex = (_globalCurrentKeyIndex + 1) % _apiKeys.Count;
         }
+    }
+
+    private async Task<int> GetAvailableKeyIndexAsync()
+    {
+        lock (_globalKeyRotationLock)
+        {
+            var now = DateTime.UtcNow;
+            for (int i = 0; i < _apiKeyStates.Count; i++)
+            {
+                var idx = (_globalCurrentKeyIndex + i) % _apiKeyStates.Count;
+                // purge requests older than 1 minute for this key
+                while (_apiKeyStates[idx].RecentRequests.Count > 0 && (now - _apiKeyStates[idx].RecentRequests.Peek()).TotalMinutes >= 1)
+                {
+                    _apiKeyStates[idx].RecentRequests.Dequeue();
+                }
+
+                if (_apiKeyStates[idx].AvailableAtUtc <= now && _apiKeyStates[idx].RecentRequests.Count < MaxRequestsPerMinute)
+                {
+                    _globalCurrentKeyIndex = idx; // start next search from this key
+                    return idx;
+                }
+            }
+        }
+
+        return -1; // none available
+    }
+
+    private void SetKeyCooldown(int index, TimeSpan? overrideCooldown = null)
+    {
+        lock (_globalKeyRotationLock)
+        {
+            var state = _apiKeyStates[index];
+            state.FailureCount++;
+            // exponential backoff base 1s, capped at 5 minutes
+            var backoffMs = Math.Min(300000, (int)(1000 * Math.Pow(2, Math.Min(6, state.FailureCount))));
+            var cooldown = overrideCooldown ?? TimeSpan.FromMilliseconds(backoffMs);
+            // add small jitter
+            var jitter = new Random().Next(0, 500);
+            state.AvailableAtUtc = DateTime.UtcNow.AddMilliseconds(cooldown.TotalMilliseconds + jitter);
+        }
+    }
+
+    private void MarkKeyHealthy(int index)
+    {
+        lock (_globalKeyRotationLock)
+        {
+            var state = _apiKeyStates[index];
+            state.FailureCount = 0;
+            state.AvailableAtUtc = DateTime.UtcNow;
+        }
+    }
+
+    private void RecordKeyRequest(int index)
+    {
+        lock (_globalKeyRotationLock)
+        {
+            var state = _apiKeyStates[index];
+            var now = DateTime.UtcNow;
+            while (state.RecentRequests.Count > 0 && (now - state.RecentRequests.Peek()).TotalMinutes >= 1)
+            {
+                state.RecentRequests.Dequeue();
+            }
+            state.RecentRequests.Enqueue(now);
+        }
+    }
+
+    private class KeyState
+    {
+        public string? ApiKey { get; set; }
+        public DateTime AvailableAtUtc { get; set; } = DateTime.MinValue;
+        public int FailureCount { get; set; } = 0;
+        public Queue<DateTime> RecentRequests { get; set; } = new Queue<DateTime>();
     }
 
     // DTOs for deserialization
     private class AnalysisDto
     {
+        [JsonPropertyName("feasibilityScore")]
         public double FeasibilityScore { get; set; }
+
+        [JsonPropertyName("feasibilityVerdict")]
         public string? FeasibilityVerdict { get; set; }
+
+        [JsonPropertyName("executiveSummary")]
         public string? ExecutiveSummary { get; set; }
+
+        [JsonPropertyName("currentPlanAnalysis")]
         public CurrentPlanAnalysisDto? CurrentPlanAnalysis { get; set; }
+
+        [JsonPropertyName("pros")]
         public List<string>? Pros { get; set; }
+
+        [JsonPropertyName("cons")]
         public List<string>? Cons { get; set; }
+
+        [JsonPropertyName("optimizedSolution")]
         public OptimizedSolutionDto? OptimizedSolution { get; set; }
+
+        [JsonPropertyName("optimizedPros")]
         public List<string>? OptimizedPros { get; set; }
+
+        [JsonPropertyName("optimizedCons")]
         public List<string>? OptimizedCons { get; set; }
+
+        [JsonPropertyName("risks")]
         public List<RiskDto>? Risks { get; set; }
+
+        [JsonPropertyName("assumptions")]
         public List<string>? Assumptions { get; set; }
+
+        [JsonPropertyName("recommendations")]
         public List<string>? Recommendations { get; set; }
+
+        [JsonPropertyName("confidenceLevel")]
         public double ConfidenceLevel { get; set; }
     }
 
     private class CurrentPlanAnalysisDto
     {
+        [JsonPropertyName("timelineAssessment")]
         public string? TimelineAssessment { get; set; }
+
+        [JsonPropertyName("scopeAssessment")]
         public string? ScopeAssessment { get; set; }
+
+        [JsonPropertyName("budgetAssessment")]
         public string? BudgetAssessment { get; set; }
+
+        [JsonPropertyName("resourceAssessment")]
         public string? ResourceAssessment { get; set; }
     }
 
     private class OptimizedSolutionDto
     {
+        [JsonPropertyName("improvedTimeline")]
         public string? ImprovedTimeline { get; set; }
+
+        [JsonPropertyName("clarifiedScope")]
         public string? ClarifiedScope { get; set; }
+
+        [JsonPropertyName("budgetOptimization")]
         public string? BudgetOptimization { get; set; }
+
+        [JsonPropertyName("resourceStrategy")]
         public string? ResourceStrategy { get; set; }
+
+        [JsonPropertyName("successProbability")]
         public double SuccessProbability { get; set; }
     }
 
     private class RiskDto
     {
+        [JsonPropertyName("description")]
         public string? Description { get; set; }
+
+        [JsonPropertyName("impact")]
         public string? Impact { get; set; }
+
+        [JsonPropertyName("mitigation")]
         public string? Mitigation { get; set; }
     }
 
