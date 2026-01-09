@@ -1,258 +1,389 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft } from "lucide-react"
+import { ChevronLeft, Sparkles, Clock, DollarSign, Target, Save } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
-import { decisionApi } from "@/lib/api"
+import { useAuth } from "@/lib/auth-context"
+import { useToast } from "@/hooks/use-toast"
 
 export default function NewDecisionPage() {
   const router = useRouter()
-  const [formData, setFormData] = useState({
-    type: "LOAN_APPROVAL",
-    createdBy: "user@example.com",
-    loanAmount: "",
-    creditScore: "",
-    employmentStatus: "EMPLOYED",
-    debtToIncomeRatio: "",
-    context: "",
-  })
-
-  const [submitted, setSubmitted] = useState(false)
+  const { user } = useAuth()
+  const { toast } = useToast()
+  const [decisionInput, setDecisionInput] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [createdDecisionId, setCreatedDecisionId] = useState<string | null>(null)
+  const [analyzing, setAnalyzing] = useState(false)
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
-    const { name, value } = e.target
-    setFormData((prev) => ({ ...prev, [name]: value }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  // Save as draft function
+  const handleSaveAsDraft = async () => {
+    const trimmedInput = decisionInput.trim()
     
-    // Validate required fields
-    if (!formData.loanAmount || !formData.creditScore || !formData.debtToIncomeRatio) {
-      alert("Please fill in all required fields")
+    if (!trimmedInput) {
+      toast({
+        title: "Input Required",
+        description: "Please describe your decision before saving.",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (trimmedInput.length < 20) {
+      toast({
+        title: "More Details Needed",
+        description: "Please provide more details about your decision (at least 20 characters).",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to create a decision.",
+        variant: "destructive"
+      })
+      router.push('/login')
       return
     }
 
     setSubmitting(true)
 
     try {
-      const inputData = {
-        loanAmount: parseFloat(formData.loanAmount),
-        creditScore: parseInt(formData.creditScore),
-        employmentStatus: formData.employmentStatus,
-        debtToIncomeRatio: parseFloat(formData.debtToIncomeRatio),
-        context: formData.context || undefined
-      }
-
-      const result = await decisionApi.createDecision({
-        type: formData.type,
-        createdBy: formData.createdBy,
-        inputData
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          input: trimmedInput,
+          createdBy: user?.email || 'user@example.com'
+        })
       })
 
-      setCreatedDecisionId(result.id)
-      setSubmitted(true)
+      if (!response.ok) {
+        let errorMessage = 'Failed to save decision as draft'
+        
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const error = await response.json()
+            errorMessage = error.message || error.error || errorMessage
+          } catch (jsonError) {
+            console.error('Failed to parse error JSON:', jsonError)
+          }
+        } else {
+          if (response.status === 401) {
+            toast({
+              title: "Authentication Error",
+              description: "Your session has expired. Please log in again.",
+              variant: "destructive"
+            })
+            router.push('/login')
+            return
+          }
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+      
+      toast({
+        title: "Draft Saved!",
+        description: "Your decision has been saved as a draft.",
+        variant: "default"
+      })
+      
+      router.push('/decisions')
     } catch (error) {
-      console.error('Failed to create decision:', error)
-      alert('Failed to create decision. Please try again.')
+      console.error('Failed to save draft:', error)
+      toast({
+        title: "Save Failed",
+        description: "Failed to save decision as draft. Please try again.",
+        variant: "destructive"
+      })
     } finally {
       setSubmitting(false)
     }
   }
 
-  if (submitted) {
-    return (
-      <main className="min-h-screen bg-background">
-        <div className="bg-card border-b border-border">
-          <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-4">
-            <Link href="/decisions">
-              <Button variant="ghost" size="sm">
-                <ChevronLeft className="w-4 h-4 mr-2" />
-                Back
-              </Button>
-            </Link>
-            <h1 className="text-2xl font-bold text-foreground">Decision Created</h1>
-          </div>
-        </div>
+  // Analyze only function (without saving)
+  const handleAnalyzeOnly = async () => {
+    const trimmedInput = decisionInput.trim()
+    
+    if (!trimmedInput) {
+      toast({
+        title: "Input Required",
+        description: "Please describe your decision before analyzing.",
+        variant: "destructive"
+      })
+      return
+    }
 
-        <div className="max-w-3xl mx-auto px-6 py-12">
-          <Card className="p-8 bg-card border border-border text-center">
-            <div className="space-y-4">
-              <div className="text-4xl">✓</div>
-              <h2 className="text-2xl font-bold text-foreground">Decision submitted successfully</h2>
-              <p className="text-muted-foreground">Your decision has been created and saved.</p>
-              {createdDecisionId && (
-                <p className="text-sm font-mono text-foreground">ID: {createdDecisionId}</p>
-              )}
-              <div className="pt-4 flex gap-2 justify-center">
-                {createdDecisionId && (
-                  <Link href={`/decisions/${createdDecisionId}`}>
-                    <Button>View Decision</Button>
-                  </Link>
-                )}
-                <Link href="/decisions">
-                  <Button variant={createdDecisionId ? "outline" : "default"}>View All Decisions</Button>
-                </Link>
-                <Button variant="outline" onClick={() => {
-                  setSubmitted(false)
-                  setCreatedDecisionId(null)
-                  setFormData({
-                    type: "LOAN_APPROVAL",
-                    createdBy: "user@example.com",
-                    loanAmount: "",
-                    creditScore: "",
-                    employmentStatus: "EMPLOYED",
-                    debtToIncomeRatio: "",
-                    context: "",
-                  })
-                }}>
-                  Create Another
-                </Button>
-              </div>
-            </div>
-          </Card>
-        </div>
-      </main>
-    )
+    if (trimmedInput.length < 20) {
+      toast({
+        title: "More Details Needed",
+        description: "Please provide more details about your decision (at least 20 characters).",
+        variant: "destructive"
+      })
+      return
+    }
+
+    if (!user) {
+      toast({
+        title: "Authentication Required",
+        description: "Please log in to analyze a decision.",
+        variant: "destructive"
+      })
+      router.push('/login')
+      return
+    }
+
+    setAnalyzing(true)
+
+    try {
+      // Create a temporary analysis without saving the decision permanently
+      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/analyze-temp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${localStorage.getItem('token')}`
+        },
+        body: JSON.stringify({
+          input: trimmedInput,
+          createdBy: user?.email || 'user@example.com'
+        })
+      })
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to analyze decision'
+        
+        const contentType = response.headers.get('content-type')
+        if (contentType && contentType.includes('application/json')) {
+          try {
+            const error = await response.json()
+            errorMessage = error.message || error.error || errorMessage
+          } catch (jsonError) {
+            console.error('Failed to parse error JSON:', jsonError)
+          }
+        } else {
+          if (response.status === 401) {
+            toast({
+              title: "Authentication Error",
+              description: "Your session has expired. Please log in again.",
+              variant: "destructive"
+            })
+            router.push('/login')
+            return
+          }
+        }
+        
+        throw new Error(errorMessage)
+      }
+
+      const result = await response.json()
+      
+      toast({
+        title: "Analysis Complete!",
+        description: "Your decision has been analyzed. Viewing temporary results.",
+        variant: "default"
+      })
+      
+      // Store temporary analysis results and redirect to temp analysis view
+      localStorage.setItem('tempAnalysis', JSON.stringify({
+        input: trimmedInput,
+        analysis: result,
+        timestamp: Date.now()
+      }))
+      
+      router.push('/decisions/temp-analysis')
+    } catch (error) {
+      console.error('Failed to analyze decision:', error)
+      toast({
+        title: "Analysis Failed",
+        description: "Failed to analyze decision. Please try again.",
+        variant: "destructive"
+      })
+    } finally {
+      setAnalyzing(false)
+    }
   }
 
+  const examplePrompts = [
+    "Launch a mobile app with authentication and chat features in 3 months. Team: 2 iOS devs, 1 backend dev. Budget: $75k.",
+    "Build a 2-story house with 4 bedrooms in 8 months. Budget: $350k. Location: suburban area with zoning restrictions.",
+    "Implement microservices migration for a monolithic e-commerce platform. Timeline: 6 months. Team: 5 engineers, 1 architect.",
+    "Create an AI-powered customer support chatbot with multi-language support. Timeline: 4 months. Budget: $90k. Must integrate with existing CRM."
+  ]
+
   return (
-    <main className="min-h-screen bg-background">
-      <div className="bg-card border-b border-border">
-        <div className="max-w-3xl mx-auto px-6 py-4 flex items-center gap-4">
+    <main className="min-h-screen bg-gradient-to-br from-white to-green-50 dark:from-slate-950 dark:to-slate-900">
+      <div className="bg-white/80 dark:bg-slate-950/80 backdrop-blur border-b border-green-100 dark:border-slate-800">
+        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
           <Link href="/decisions">
             <Button variant="ghost" size="sm">
               <ChevronLeft className="w-4 h-4 mr-2" />
               Back
             </Button>
           </Link>
-          <h1 className="text-2xl font-bold text-foreground">Create New Decision</h1>
+          <h1 className="text-2xl font-bold">Create New Decision</h1>
         </div>
       </div>
 
-      <div className="max-w-3xl mx-auto px-6 py-6">
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Decision Type */}
-          <Card className="p-6 bg-card border border-border">
-            <h2 className="text-lg font-bold text-foreground mb-4">Decision Type</h2>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">Type</label>
-              <select
-                name="type"
-                value={formData.type}
-                onChange={handleInputChange}
-                className="w-full px-4 py-2 text-sm bg-background border border-border rounded-md text-foreground"
-              >
-                <option>LOAN_APPROVAL</option>
-                <option>FRAUD_DETECTION</option>
-                <option>CLAIM_PROCESSING</option>
-                <option>PRICING_ADJUSTMENT</option>
-              </select>
+      <div className="max-w-4xl mx-auto px-6 py-8">
+        {/* Header */}
+        <div className="mb-8">
+          <div className="flex items-center gap-2 mb-3">
+            <Sparkles className="w-5 h-5 text-green-600 dark:text-green-400" />
+            <h2 className="text-xl font-bold">Decision Workspace</h2>
+          </div>
+          <p className="text-foreground/60">
+            Describe your decision in natural language. Gemini AI will analyze feasibility, identify risks, and provide structured recommendations.
+          </p>
+        </div>
+
+        {/* Main Form */}
+        <div className="space-y-6">
+          <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
+            <label className="block text-sm font-semibold mb-3">
+              Describe Your Decision <span className="text-red-600">*</span>
+            </label>
+            <textarea
+              value={decisionInput}
+              onChange={(e) => setDecisionInput(e.target.value)}
+              placeholder="Example: Launch a mobile app with authentication and real-time chat in 3 months. Team: 2 iOS developers, 1 backend engineer. Budget: $75,000. Constraints: Must support 10K concurrent users."
+              rows={8}
+              className="w-full px-4 py-3 text-sm bg-white dark:bg-slate-800 border border-green-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
+              disabled={submitting || analyzing}
+            />
+            <p className="text-xs text-foreground/50 mt-2">
+              {decisionInput.length} characters (minimum 20 required)
+            </p>
+          </Card>
+
+          {/* Context Hints */}
+          <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
+            <h3 className="text-sm font-semibold mb-4">AI will automatically infer:</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="flex items-start gap-3">
+                <Clock className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-sm">Timeline</div>
+                  <div className="text-xs text-foreground/60">Start, end, milestones</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-sm">Budget</div>
+                  <div className="text-xs text-foreground/60">Cost constraints</div>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <Target className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                <div>
+                  <div className="font-semibold text-sm">Scope</div>
+                  <div className="text-xs text-foreground/60">Requirements, deliverables</div>
+                </div>
+              </div>
             </div>
           </Card>
 
-          {/* Structured Inputs */}
-          <Card className="p-6 bg-card border border-border">
-            <h2 className="text-lg font-bold text-foreground mb-4">Loan Details</h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  Loan Amount <span className="text-red-600">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="loanAmount"
-                  value={formData.loanAmount}
-                  onChange={handleInputChange}
-                  placeholder="250000"
-                  required
-                  className="w-full px-4 py-2 text-sm bg-background border border-border rounded-md text-foreground"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  Credit Score <span className="text-red-600">*</span>
-                </label>
-                <input
-                  type="number"
-                  name="creditScore"
-                  value={formData.creditScore}
-                  onChange={handleInputChange}
-                  placeholder="720"
-                  required
-                  className="w-full px-4 py-2 text-sm bg-background border border-border rounded-md text-foreground"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">Employment Status</label>
-                <select
-                  name="employmentStatus"
-                  value={formData.employmentStatus}
-                  onChange={handleInputChange}
-                  className="w-full px-4 py-2 text-sm bg-background border border-border rounded-md text-foreground"
+          {/* Example Prompts */}
+          <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
+            <h3 className="text-sm font-semibold mb-3">Example Decisions:</h3>
+            <div className="space-y-2">
+              {examplePrompts.map((prompt, idx) => (
+                <button
+                  key={idx}
+                  type="button"
+                  onClick={() => setDecisionInput(prompt)}
+                  className="w-full text-left px-4 py-3 text-xs bg-green-50 dark:bg-slate-800 border border-green-100 dark:border-slate-700 rounded-lg hover:bg-green-100 dark:hover:bg-slate-700 transition-colors"
+                  disabled={submitting || analyzing}
                 >
-                  <option>EMPLOYED</option>
-                  <option>SELF_EMPLOYED</option>
-                  <option>UNEMPLOYED</option>
-                  <option>RETIRED</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-semibold text-foreground mb-2">
-                  Debt-to-Income Ratio <span className="text-red-600">*</span>
-                </label>
-                <input
-                  type="number"
-                  step="0.01"
-                  name="debtToIncomeRatio"
-                  value={formData.debtToIncomeRatio}
-                  onChange={handleInputChange}
-                  placeholder="0.35"
-                  required
-                  className="w-full px-4 py-2 text-sm bg-background border border-border rounded-md text-foreground"
-                />
-              </div>
+                  {prompt}
+                </button>
+              ))}
             </div>
           </Card>
 
-          {/* Unstructured Context */}
-          <Card className="p-6 bg-card border border-border">
-            <h2 className="text-lg font-bold text-foreground mb-4">Additional Context</h2>
-            <div>
-              <label className="block text-sm font-semibold text-foreground mb-2">Notes</label>
-              <textarea
-                name="context"
-                value={formData.context}
-                onChange={handleInputChange}
-                placeholder="Any additional context for the decision..."
-                rows={5}
-                className="w-full px-4 py-2 text-sm bg-background border border-border rounded-md text-foreground"
-              />
-            </div>
-          </Card>
-
-          {/* Submit */}
-          <div className="flex gap-3">
-            <Button type="submit" className="flex-1" disabled={submitting}>
-              {submitting ? "Creating..." : "Submit Decision"}
+          {/* Action Buttons */}
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+            <Button 
+              onClick={handleAnalyzeOnly}
+              className="bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700" 
+              disabled={submitting || analyzing}
+            >
+              {analyzing ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Analyzing...
+                </>
+              ) : (
+                <>
+                  <Sparkles className="w-4 h-4 mr-2" />
+                  Analyze Only
+                </>
+              )}
             </Button>
-            <Link href="/decisions" className="flex-1">
-              <Button variant="outline" className="w-full bg-transparent" disabled={submitting}>
+            
+            <Button 
+              onClick={handleSaveAsDraft}
+              variant="outline"
+              className="border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20" 
+              disabled={submitting || analyzing}
+            >
+              {submitting ? (
+                <>
+                  <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin mr-2"></div>
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4 mr-2" />
+                  Save as Draft
+                </>
+              )}
+            </Button>
+
+            <Link href="/decisions" className="flex">
+              <Button variant="outline" className="w-full" disabled={submitting || analyzing}>
                 Cancel
               </Button>
             </Link>
           </div>
-        </form>
+
+          {/* Info Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
+            <Card className="p-4 border-blue-100 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20 backdrop-blur">
+              <div className="flex items-start gap-3">
+                <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100">Analyze Only</h4>
+                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
+                    Get instant AI analysis without saving the decision. Perfect for quick exploration.
+                  </p>
+                </div>
+              </div>
+            </Card>
+            
+            <Card className="p-4 border-green-100 dark:border-green-700 bg-green-50/50 dark:bg-green-900/20 backdrop-blur">
+              <div className="flex items-start gap-3">
+                <Save className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                <div>
+                  <h4 className="font-semibold text-sm text-green-900 dark:text-green-100">Save as Draft</h4>
+                  <p className="text-xs text-green-700 dark:text-green-300 mt-1">
+                    Save your decision for future analysis and refinement. Keeps decision in your history.
+                  </p>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
       </div>
     </main>
   )
