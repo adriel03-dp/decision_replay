@@ -69,39 +69,42 @@ export default function DiffViewPage({ params }: { params: Promise<{ id: string 
         })
       }
 
-    // Compare rules
-    if (event1.payload.rules && event2.payload.rules) {
-      event2.payload.rules.forEach((rule2: any, idx: number) => {
-        const rule1 = event1.payload.rules[idx]
-        if (rule1 && rule1.passed !== rule2.passed) {
-          differences.push({
-            field: `rule.${rule2.name}`,
-            before: rule1.passed ? "PASS" : "FAIL",
-            after: rule2.passed ? "PASS" : "FAIL",
-          })
-        }
-      })
-    }
+      // Compare rules
+      if (event1.payload.rules && event2.payload.rules) {
+        event2.payload.rules.forEach((rule2: any, idx: number) => {
+          const rule1 = event1.payload.rules[idx]
+          if (rule1 && rule1.passed !== rule2.passed) {
+            differences.push({
+              field: `rule.${rule2.name}`,
+              before: rule1.passed ? "PASS" : "FAIL",
+              after: rule2.passed ? "PASS" : "FAIL",
+            })
+          }
+        })
+      }
 
-    // Compare reasoning
-    if (event1.payload.confidence !== event2.payload.confidence) {
-      differences.push({
-        field: "confidence",
-        before: event1.payload.confidence,
-        after: event2.payload.confidence,
-      })
+      // Compare reasoning
+      if (event1.payload.confidence !== event2.payload.confidence) {
+        differences.push({
+          field: "confidence",
+          before: event1.payload.confidence,
+          after: event2.payload.confidence,
+        })
+      }
+    } catch (error) {
+      console.error("Error comparing events:", error)
     }
 
     return differences
   }
 
-  const differences = getDifferences()\n  \n  // Add validation for events\n  if (!event1 || !event2) {\n    return (\n      <main className=\"min-h-screen bg-background\">\n        <div className=\"bg-card border-b border-border\">\n          <div className=\"max-w-7xl mx-auto px-6 py-4 flex items-center gap-4\">\n            <Link href={`/decisions/${currentDecision.id}`}>\n              <Button variant=\"ghost\" size=\"sm\">\n                <ChevronLeft className=\"w-4 h-4 mr-2\" />\n                Back\n              </Button>\n            </Link>\n            <h1 className=\"text-2xl font-bold text-foreground\">Diff View</h1>\n          </div>\n        </div>\n        <div className=\"max-w-7xl mx-auto px-6 py-6\">\n          <Card className=\"p-8 text-center\">\n            <h2 className=\"text-xl font-semibold mb-4\">Insufficient Data</h2>\n            <p className=\"text-muted-foreground\">\n              Not enough event data to perform comparison. Please ensure at least 2 events exist.\n            </p>\n          </Card>\n        </div>\n      </main>\n    )\n  }"
+  const differences = getDifferences()
 
   return (
     <main className="min-h-screen bg-background">
       <div className="bg-card border-b border-border">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Link href={`/decisions/${currentDecision.id}`}>
+          <Link href={`/decisions/${currentDecision!.id}`}>
             <Button variant="ghost" size="sm">
               <ChevronLeft className="w-4 h-4 mr-2" />
               Back
