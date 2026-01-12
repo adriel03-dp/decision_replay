@@ -1,4 +1,6 @@
 using DecisionReplay.Domain.ValueObjects;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.Application.Interfaces;
 
@@ -23,10 +25,10 @@ public interface IIntentParser
     /// <summary>
     /// Parses natural language input and extracts decision context
     /// </summary>
-    Task<DecisionContext> ParseInputAsync(string naturalLanguageInput, string userId);
+    Task<DecisionContext> ParseInputAsync(string naturalLanguageInput, string userId, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Generates a domain-specific schema based on the parsed context
     /// </summary>
-    Task<DecisionSchema> GenerateSchemaAsync(DecisionContext context);
+    Task<DecisionSchema> GenerateSchemaAsync(DecisionContext context, CancellationToken cancellationToken = default);
 }

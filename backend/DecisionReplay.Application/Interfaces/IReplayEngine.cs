@@ -1,4 +1,6 @@
 using DecisionReplay.Domain.ValueObjects;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.Application.Interfaces;
 
@@ -23,7 +25,8 @@ public interface IReplayEngine
     /// </summary>
     Task<DecisionReplayResult> CompareContextsAsync(
         DecisionContext original,
-        DecisionContext updated);
+        DecisionContext updated,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Performs full replay: re-analyzes with new context and compares results
@@ -32,7 +35,8 @@ public interface IReplayEngine
         Guid decisionId,
         DecisionContext originalContext,
         DecisionAnalysis originalAnalysis,
-        DecisionContext updatedContext);
+        DecisionContext updatedContext,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

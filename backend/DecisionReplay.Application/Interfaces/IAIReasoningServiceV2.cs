@@ -1,4 +1,6 @@
 using DecisionReplay.Domain.ValueObjects;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.Application.Interfaces;
 
@@ -21,7 +23,7 @@ public interface IAIReasoningServiceV2
     /// Generates comprehensive analysis for a decision based on its context
     /// Returns structured DecisionAnalysis with feasibility, risks, pros/cons, etc.
     /// </summary>
-    Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionContext context, DecisionSchema? schema = null);
+    Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionContext context, DecisionSchema? schema = null, CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Re-analyzes a decision with updated context (for replay capability)
@@ -29,10 +31,11 @@ public interface IAIReasoningServiceV2
     Task<DecisionAnalysis> ReAnalyzeDecisionAsync(
         DecisionContext originalContext,
         DecisionContext updatedContext,
-        DecisionSchema? schema = null);
+        DecisionSchema? schema = null,
+        CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Answers specific questions about a decision
     /// </summary>
-    Task<string> QueryDecisionAsync(DecisionContext context, string question);
+    Task<string> QueryDecisionAsync(DecisionContext context, string question, CancellationToken cancellationToken = default);
 }
