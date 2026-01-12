@@ -3,6 +3,8 @@ using DecisionReplay.Domain.ValueObjects;
 using System.Text;
 using System.Text.Json;
 using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.Infrastructure.Services;
 
@@ -33,7 +35,7 @@ public class GeminiIntentParser : IIntentParser
     public GeminiIntentParser(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient();
-        _httpClient.Timeout = TimeSpan.FromSeconds(45); // Increased timeout for reliability
+        _httpClient.Timeout = TimeSpan.FromSeconds(25); // Faster timeout for quicker feedback
         _apiKeys = new List<string>();
 
         var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
@@ -47,7 +49,7 @@ public class GeminiIntentParser : IIntentParser
         Console.WriteLine($"[GEMINI INIT] Intent Parser loaded {_apiKeys.Count} API key(s)");
     }
 
-    public async Task<DecisionContext> ParseInputAsync(string naturalLanguageInput, string userId)
+    public async Task<DecisionContext> ParseInputAsync(string naturalLanguageInput, string userId, CancellationToken cancellationToken = default)
     {
         if (string.IsNullOrWhiteSpace(naturalLanguageInput))
             throw new ArgumentException("Input cannot be empty", nameof(naturalLanguageInput));
@@ -69,7 +71,7 @@ public class GeminiIntentParser : IIntentParser
             Console.WriteLine($"[GEMINI] Starting intent parsing for input: {naturalLanguageInput.Substring(0, Math.Min(50, naturalLanguageInput.Length))}...");
             var prompt = BuildIntentParsingPrompt(naturalLanguageInput);
             Console.WriteLine("[GEMINI] Calling Gemini API for intent parsing...");
-            var response = await CallGeminiApiAsync(prompt);
+            var response = await CallGeminiApiAsync(prompt, cancellationToken);
             Console.WriteLine($"[GEMINI] Received response: {response.Substring(0, Math.Min(100, response.Length))}...");
             var parsed = ParseGeminiResponse(response);
 
@@ -97,7 +99,7 @@ public class GeminiIntentParser : IIntentParser
         }
     }
 
-    public async Task<DecisionSchema> GenerateSchemaAsync(DecisionContext context)
+    public async Task<DecisionSchema> GenerateSchemaAsync(DecisionContext context, CancellationToken cancellationToken = default)
     {
         var domainType = context.GetAttribute<string>("domain") ?? "Unknown";
 
@@ -114,7 +116,7 @@ public class GeminiIntentParser : IIntentParser
         try
         {
             var prompt = BuildSchemaGenerationPrompt(context);
-            var response = await CallGeminiApiAsync(prompt);
+            var response = await CallGeminiApiAsync(prompt, cancellationToken);
             var parsedFields = ParseSchemaFields(response);
 
             foreach (var kvp in parsedFields)
@@ -135,47 +137,23 @@ public class GeminiIntentParser : IIntentParser
 
     private string BuildIntentParsingPrompt(string input)
     {
-        return $@"You are a decision analysis expert. Analyze this input and extract KEY decision factors in JSON.
+        return $@"Extract decision factors from this input. Return ONLY valid JSON (no markdown):
 
-CRITICAL: Extract Time, Scope, and Budget as primary decision factors.
+Input: ""{input}""
 
-User Input: ""{input}""
-
-Return EXACT JSON format:
+JSON format:
 {{
   ""domain"": ""<DomainType>"",
   ""intent"": ""<What user wants to decide>"",
-  ""timelineInfo"": {{
-    ""duration"": ""<Extracted time period>"",
-    ""deadline"": ""<Any specific deadline>"",
-    ""urgency"": ""HIGH|MEDIUM|LOW"",
-    ""timeConstraints"": ""<Time-related limitations>""
-  }},
-  ""scopeInfo"": {{
-    ""objectives"": ""<Main goals/deliverables>"",
-    ""boundaries"": ""<What's included/excluded>"",
-    ""complexity"": ""HIGH|MEDIUM|LOW"",
-    ""deliverables"": [""<List of expected outputs>""]
-  }},
-  ""budgetInfo"": {{
-    ""amount"": ""<Budget amount if specified>"",
-    ""currency"": ""<Currency if specified>"",
-    ""constraints"": ""<Budget limitations>"",
-    ""costFactors"": [""<Main cost drivers>""]
-  }},
-  ""resourceInfo"": {{
-    ""team"": ""<Team size/composition>"",
-    ""skills"": [""<Required skills>""],
-    ""tools"": [""<Technology/tools needed>""],
-    ""dependencies"": [""<External dependencies>""]
-  }},
-  ""riskFactors"": [""<Potential risks/challenges>""],
-  ""successCriteria"": [""<How success will be measured>""]
+  ""timeline"": ""<Duration or deadline if mentioned>"",
+  ""budget"": ""<Budget if mentioned>"",
+  ""resources"": ""<Team size or resources if mentioned>"",
+  ""scope"": ""<Main objectives/deliverables>"",
+  ""constraints"": [""<Key limitations>""],
+  ""risks"": [""<Potential challenges>""]
 }}
 
-Focus on extracting concrete Time/Scope/Budget details for accurate feasibility analysis.
-
-Only extract what's explicitly mentioned or clearly implied. Use ""Not specified"" for missing info.";
+Use ""Not specified"" for missing info.";
     }
 
     private string BuildSchemaGenerationPrompt(DecisionContext context)
@@ -197,7 +175,7 @@ For Logistics: route, capacity, delivery_windows, inventory_levels, etc.
 Provide 5-8 relevant fields for {domain}.";
     }
 
-    private async Task<string> CallGeminiApiAsync(string prompt)
+    private async Task<string> CallGeminiApiAsync(string prompt, CancellationToken cancellationToken = default)
     {
         var requestBody = new
         {
@@ -220,13 +198,13 @@ Provide 5-8 relevant fields for {domain}.";
         for (int attempt = 0; attempt < _apiKeys.Count; attempt++)
         {
             var apiKey = GetCurrentApiKey();
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
 
             Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{_globalCurrentKeyIndex + 1}");
 
             try
             {
-                var response = await _httpClient.PostAsync(url, content);
+                var response = await _httpClient.PostAsync(url, content, cancellationToken);
                 Console.WriteLine($"[GEMINI] Response status: {response.StatusCode}");
 
                 if (response.IsSuccessStatusCode)

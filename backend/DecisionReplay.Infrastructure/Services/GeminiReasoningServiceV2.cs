@@ -5,6 +5,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Net;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.Infrastructure.Services;
 
@@ -64,7 +66,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         Console.WriteLine($"[GEMINI INIT] Reasoning Service loaded {_apiKeys.Count} API key(s)");
     }
 
-    public async Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionContext context, DecisionSchema? schema = null)
+    public async Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionContext context, DecisionSchema? schema = null, CancellationToken cancellationToken = default)
     {
         if (_apiKeys.Count == 0)
         {
@@ -74,12 +76,12 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         try
         {
             Console.WriteLine("[GEMINI] Starting decision analysis...");
-            await WaitForRateLimitAsync();
+            await WaitForRateLimitAsync(cancellationToken);
             Console.WriteLine("[GEMINI] Rate limit check passed...");
 
             var prompt = BuildAnalysisPrompt(context, schema);
             Console.WriteLine("[GEMINI] Calling Gemini API for analysis...");
-            var response = await CallGeminiApiAsync(prompt);
+            var response = await CallGeminiApiAsync(prompt, cancellationToken);
             Console.WriteLine($"[GEMINI] Analysis response received: {response.Substring(0, Math.Min(100, response.Length))}...");
             var analysis = ParseAnalysisResponse(response);
 
@@ -95,7 +97,8 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
     public async Task<DecisionAnalysis> ReAnalyzeDecisionAsync(
         DecisionContext originalContext,
         DecisionContext updatedContext,
-        DecisionSchema? schema = null)
+        DecisionSchema? schema = null,
+        CancellationToken cancellationToken = default)
     {
         if (_apiKeys.Count == 0)
         {
@@ -104,10 +107,10 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 
         try
         {
-            await WaitForRateLimitAsync();
+            await WaitForRateLimitAsync(cancellationToken);
 
             var prompt = BuildReplayAnalysisPrompt(originalContext, updatedContext, schema);
-            var response = await CallGeminiApiAsync(prompt);
+            var response = await CallGeminiApiAsync(prompt, cancellationToken);
             var analysis = ParseAnalysisResponse(response);
 
             return analysis;
@@ -119,7 +122,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         }
     }
 
-    public async Task<string> QueryDecisionAsync(DecisionContext context, string question)
+    public async Task<string> QueryDecisionAsync(DecisionContext context, string question, CancellationToken cancellationToken = default)
     {
         if (_apiKeys.Count == 0)
         {
@@ -135,10 +138,10 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 
         try
         {
-            await WaitForRateLimitAsync();
+            await WaitForRateLimitAsync(cancellationToken);
 
             var prompt = BuildQueryPrompt(context, question);
-            var response = await CallGeminiApiAsync(prompt);
+            var response = await CallGeminiApiAsync(prompt, cancellationToken);
 
             return response;
         }
@@ -307,7 +310,7 @@ ANSWER (decision-scoped only):";
         return sb.ToString();
     }
 
-    private async Task<string> CallGeminiApiAsync(string prompt)
+    private async Task<string> CallGeminiApiAsync(string prompt, CancellationToken cancellationToken = default)
     {
         var requestBody = new
         {
@@ -334,7 +337,7 @@ ANSWER (decision-scoped only):";
         Exception? lastException = null;
 
         // Limit concurrency across instances
-        await _globalConcurrencyLimiter.WaitAsync();
+        await _globalConcurrencyLimiter.WaitAsync(cancellationToken);
         try
         {
             // Try up to number of keys attempts but pick only available keys (not in cooldown)
@@ -551,9 +554,9 @@ ANSWER (decision-scoped only):";
         );
     }
 
-    private async Task WaitForRateLimitAsync()
+    private async Task WaitForRateLimitAsync(CancellationToken cancellationToken = default)
     {
-        await _rateLimiter.WaitAsync();
+        await _rateLimiter.WaitAsync(cancellationToken);
         try
         {
             var now = DateTime.UtcNow;

@@ -1,5 +1,7 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.ValueObjects;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.Infrastructure.Services;
 
@@ -33,7 +35,8 @@ public class DecisionReplayEngine : IReplayEngine
 
     public Task<DecisionReplayResult> CompareContextsAsync(
         DecisionContext original,
-        DecisionContext updated)
+        DecisionContext updated,
+        CancellationToken cancellationToken = default)
     {
         var changes = DetectChanges(original, updated);
         var impactSummary = GenerateImpactSummary(changes);
@@ -58,7 +61,8 @@ public class DecisionReplayEngine : IReplayEngine
         Guid decisionId,
         DecisionContext originalContext,
         DecisionAnalysis originalAnalysis,
-        DecisionContext updatedContext)
+        DecisionContext updatedContext,
+        CancellationToken cancellationToken = default)
     {
         // Detect changes
         var changes = DetectChanges(originalContext, updatedContext);
@@ -66,7 +70,9 @@ public class DecisionReplayEngine : IReplayEngine
         // Re-analyze with updated context
         var updatedAnalysis = await _reasoningService.ReAnalyzeDecisionAsync(
             originalContext,
-            updatedContext
+            updatedContext,
+            schema: null,
+            cancellationToken: cancellationToken
         );
 
         // Generate impact summary
