@@ -51,6 +51,7 @@ export interface ReplayResponse {
 export interface CreateDecisionRequest {
   input: string;        // V2 uses natural language input
   createdBy?: string;   // Optional - backend gets from JWT
+  analyzeNow?: boolean; // Optional - default true. If false, creates Draft without analysis.
 }
 
 export interface UpdateDecisionRequest {

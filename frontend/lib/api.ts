@@ -3,7 +3,7 @@ import type { Decision, CreateDecisionRequest, ReplayResponse, DecisionEvent, De
 
 export const decisionApi = {
   // ============= Decision CRUD =============
-  
+
   // Get all decisions
   async getAllDecisions(): Promise<DecisionExtended[]> {
     try {
@@ -29,7 +29,8 @@ export const decisionApi = {
   async createDecision(data: CreateDecisionRequest): Promise<Decision> {
     const response = await apiClient.post<Decision>('/v2/decisions', {
       input: data.input,
-      createdBy: data.createdBy || 'current-user'  // Will be overridden by backend from JWT
+      createdBy: data.createdBy || 'current-user',  // Will be overridden by backend from JWT
+      analyzeNow: data.analyzeNow ?? true // Default to true if not specified
     });
     return response.data;
   },
@@ -67,7 +68,7 @@ export const decisionApi = {
   },
 
   // ============= Decision with Events Combined =============
-  
+
   // Get decision with its events (for replay page)
   async getDecisionWithEvents(decisionId: string): Promise<DecisionExtended | null> {
     try {
