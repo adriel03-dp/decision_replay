@@ -3,11 +3,12 @@
 import { useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Sparkles, Clock, DollarSign, Target, Save } from "lucide-react"
+import { ChevronLeft, Sparkles, Clock, DollarSign, Target, Save, FileText } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card } from "@/components/ui/card"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
+import { decisionApi } from "@/lib/api"
 
 export default function NewDecisionPage() {
   const router = useRouter()
@@ -17,17 +18,16 @@ export default function NewDecisionPage() {
   const [submitting, setSubmitting] = useState(false)
   const [analyzing, setAnalyzing] = useState(false)
 
-  // Save as draft function
-  const handleSaveAsDraft = async () => {
+  const validateInput = () => {
     const trimmedInput = decisionInput.trim()
-    
+
     if (!trimmedInput) {
       toast({
         title: "Input Required",
-        description: "Please describe your decision before saving.",
+        description: "Please describe your decision before proceeding.",
         variant: "destructive"
       })
-      return
+      return false
     }
 
     if (trimmedInput.length < 20) {
@@ -36,7 +36,7 @@ export default function NewDecisionPage() {
         description: "Please provide more details about your decision (at least 20 characters).",
         variant: "destructive"
       })
-      return
+      return false
     }
 
     if (!user) {
@@ -46,170 +46,50 @@ export default function NewDecisionPage() {
         variant: "destructive"
       })
       router.push('/login')
-      return
+      return false
     }
 
-    setSubmitting(true)
-
-    try {
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          input: trimmedInput,
-          createdBy: user?.email || 'user@example.com'
-        })
-      })
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to save decision as draft'
-        
-        const contentType = response.headers.get('content-type')
-        if (contentType && contentType.includes('application/json')) {
-          try {
-            const error = await response.json()
-            errorMessage = error.message || error.error || errorMessage
-          } catch (jsonError) {
-            console.error('Failed to parse error JSON:', jsonError)
-          }
-        } else {
-          if (response.status === 401) {
-            toast({
-              title: "Authentication Error",
-              description: "Your session has expired. Please log in again.",
-              variant: "destructive"
-            })
-            router.push('/login')
-            return
-          }
-        }
-        
-        throw new Error(errorMessage)
-      }
-
-      const result = await response.json()
-      
-      toast({
-        title: "Draft Saved!",
-        description: "Your decision has been saved as a draft.",
-        variant: "default"
-      })
-      
-      router.push('/decisions')
-    } catch (error) {
-      console.error('Failed to save draft:', error)
-      toast({
-        title: "Save Failed",
-        description: "Failed to save decision as draft. Please try again.",
-        variant: "destructive"
-      })
-    } finally {
-      setSubmitting(false)
-    }
+    return true
   }
 
-  // Analyze only function (without saving)
-  const handleAnalyzeOnly = async () => {
-    const trimmedInput = decisionInput.trim()
-    
-    if (!trimmedInput) {
-      toast({
-        title: "Input Required",
-        description: "Please describe your decision before analyzing.",
-        variant: "destructive"
-      })
-      return
-    }
+  const handleCreateDecision = async (analyzeNow: boolean) => {
+    if (!validateInput()) return
 
-    if (trimmedInput.length < 20) {
-      toast({
-        title: "More Details Needed",
-        description: "Please provide more details about your decision (at least 20 characters).",
-        variant: "destructive"
-      })
-      return
-    }
-
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to analyze a decision.",
-        variant: "destructive"
-      })
-      router.push('/login')
-      return
-    }
-
-    setAnalyzing(true)
+    if (analyzeNow) setAnalyzing(true)
+    else setSubmitting(true)
 
     try {
-      // Create a temporary analysis without saving the decision permanently
-      const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/analyze-temp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${localStorage.getItem('token')}`
-        },
-        body: JSON.stringify({
-          input: trimmedInput,
-          createdBy: user?.email || 'user@example.com'
-        })
+      const decision = await decisionApi.createDecision({
+        input: decisionInput.trim(),
+        createdBy: user?.email || 'user@example.com',
+        analyzeNow: analyzeNow
       })
 
-      if (!response.ok) {
-        let errorMessage = 'Failed to analyze decision'
-        
-        const contentType = response.headers.get('content-type')
-        if (contentType && contentType.includes('application/json')) {
-          try {
-            const error = await response.json()
-            errorMessage = error.message || error.error || errorMessage
-          } catch (jsonError) {
-            console.error('Failed to parse error JSON:', jsonError)
-          }
-        } else {
-          if (response.status === 401) {
-            toast({
-              title: "Authentication Error",
-              description: "Your session has expired. Please log in again.",
-              variant: "destructive"
-            })
-            router.push('/login')
-            return
-          }
-        }
-        
-        throw new Error(errorMessage)
+      if (analyzeNow) {
+        toast({
+          title: "Analysis Complete!",
+          description: "Your decision has been analyzed and saved.",
+          variant: "default"
+        })
+      } else {
+        toast({
+          title: "Draft Saved",
+          description: "Your decision has been saved as a draft.",
+          variant: "default"
+        })
       }
 
-      const result = await response.json()
-      
-      toast({
-        title: "Analysis Complete!",
-        description: "Your decision has been analyzed. Viewing temporary results.",
-        variant: "default"
-      })
-      
-      // Store temporary analysis results and redirect to temp analysis view
-      localStorage.setItem('tempAnalysis', JSON.stringify({
-        input: trimmedInput,
-        analysis: result,
-        timestamp: Date.now()
-      }))
-      
-      router.push('/decisions/temp-analysis')
+      router.push(`/decisions/${decision.id}`)
     } catch (error) {
-      console.error('Failed to analyze decision:', error)
+      console.error('Failed to create decision:', error)
       toast({
-        title: "Analysis Failed",
-        description: "Failed to analyze decision. Please try again.",
+        title: "Operation Failed",
+        description: "Failed to create decision. Please try again.",
         variant: "destructive"
       })
     } finally {
       setAnalyzing(false)
+      setSubmitting(false)
     }
   }
 
@@ -313,9 +193,9 @@ export default function NewDecisionPage() {
 
           {/* Action Buttons */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Button 
-              onClick={handleAnalyzeOnly}
-              className="bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700" 
+            <Button
+              onClick={() => handleCreateDecision(true)}
+              className="bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700"
               disabled={submitting || analyzing}
             >
               {analyzing ? (
@@ -326,15 +206,15 @@ export default function NewDecisionPage() {
               ) : (
                 <>
                   <Sparkles className="w-4 h-4 mr-2" />
-                  Analyze Only
+                  Analyze & Save
                 </>
               )}
             </Button>
-            
-            <Button 
-              onClick={handleSaveAsDraft}
+
+            <Button
+              onClick={() => handleCreateDecision(false)}
               variant="outline"
-              className="border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20" 
+              className="border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
               disabled={submitting || analyzing}
             >
               {submitting ? (
@@ -344,7 +224,7 @@ export default function NewDecisionPage() {
                 </>
               ) : (
                 <>
-                  <Save className="w-4 h-4 mr-2" />
+                  <FileText className="w-4 h-4 mr-2" />
                   Save as Draft
                 </>
               )}
@@ -363,21 +243,21 @@ export default function NewDecisionPage() {
               <div className="flex items-start gap-3">
                 <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
                 <div>
-                  <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100">Analyze Only</h4>
+                  <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100">Analyze & Save</h4>
                   <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Get instant AI analysis without saving the decision. Perfect for quick exploration.
+                    Get instant AI analysis and save the decision. Best for complete inputs.
                   </p>
                 </div>
               </div>
             </Card>
-            
+
             <Card className="p-4 border-green-100 dark:border-green-700 bg-green-50/50 dark:bg-green-900/20 backdrop-blur">
               <div className="flex items-start gap-3">
-                <Save className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
+                <FileText className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
                 <div>
                   <h4 className="font-semibold text-sm text-green-900 dark:text-green-100">Save as Draft</h4>
                   <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                    Save your decision for future analysis and refinement. Keeps decision in your history.
+                    Save without analysis. Useful for quick capture or when offline. You can analyze later.
                   </p>
                 </div>
               </div>
