@@ -8,7 +8,10 @@ namespace DecisionReplay.API.DTOs;
 public record NaturalLanguageDecisionRequest(
     string Input,      // Free-form natural language input
     string CreatedBy
-);
+)
+{
+    public bool AnalyzeNow { get; init; } = true;
+}
 
 /// <summary>
 /// Response DTO for decision with full context
