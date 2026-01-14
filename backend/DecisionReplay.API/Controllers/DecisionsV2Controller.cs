@@ -6,6 +6,8 @@ using DecisionReplay.API.DTOs;
 using DecisionReplay.API.Mapping;
 using DecisionReplay.Domain.Entities;
 using DecisionReplay.Domain.ValueObjects;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.API.Controllers;
 
@@ -94,7 +96,12 @@ public class DecisionsV2Controller : ControllerBase
 
             // Create decision (parses intent, generates schema)
             _logger.LogInformation("Step 1: Calling CreateDecisionAsync...");
-            var decision = await _service.CreateDecisionAsync(sanitizedInput, userId);
+            var decision = await _service.CreateDecisionAsync(
+                sanitizedInput, 
+                userId, 
+                request.AnalyzeNow, 
+                HttpContext.RequestAborted
+            );
 
             // Store detected domain type in the decision
             decision.DomainType = validationResult.DomainType;
@@ -355,7 +362,7 @@ public class DecisionsV2Controller : ControllerBase
 
         try
         {
-            var analysis = await _service.AnalyzeDecisionAsync(decision);
+            var analysis = await _service.AnalyzeDecisionAsync(decision, HttpContext.RequestAborted);
             await _repository.UpdateAsync(decision);
             return Ok(analysis.ToResponse());
         }
@@ -401,7 +408,8 @@ public class DecisionsV2Controller : ControllerBase
             var replayResult = await _service.ReplayDecisionAsync(
                 decision,
                 request.UpdatedInput,
-                decision.CreatedBy
+                decision.CreatedBy,
+                HttpContext.RequestAborted
             );
 
             return Ok(replayResult.ToResponse());
@@ -603,7 +611,7 @@ public class DecisionsV2Controller : ControllerBase
 
         try
         {
-            var response = await _service.QueryDecisionAsync(decision, request.Question);
+            var response = await _service.QueryDecisionAsync(decision, request.Question, HttpContext.RequestAborted);
             return Ok(new { question = request.Question, answer = response });
         }
         catch (Exception ex)
