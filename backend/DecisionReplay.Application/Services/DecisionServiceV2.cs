@@ -1,6 +1,9 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.Entities;
 using DecisionReplay.Domain.ValueObjects;
+using System;
+using System.Threading;
+using System.Threading.Tasks;
 
 namespace DecisionReplay.Application.Services;
 
@@ -42,28 +45,42 @@ public class DecisionServiceV2
     }
 
     /// <summary>
-    /// Creates a decision from natural language input with immediate analysis
-    /// Pipeline: Parse Intent → Generate Schema → Create Decision → Auto-Analyze
+    /// Creates a decision from natural language input.
+    /// If analyzeNow is true, triggers immediate analysis.
     /// </summary>
-    public async Task<DecisionV2> CreateDecisionAsync(string naturalLanguageInput, string userId)
+    public async Task<DecisionV2> CreateDecisionAsync(string naturalLanguageInput, string userId, bool analyzeNow = true, CancellationToken cancellationToken = default)
     {
         // Step 1: Parse intent and extract context
-        var context = await _intentParser.ParseInputAsync(naturalLanguageInput, userId);
+        var context = await _intentParser.ParseInputAsync(naturalLanguageInput, userId, cancellationToken);
 
         // Step 2: Generate schema based on inferred domain
-        var schema = await _intentParser.GenerateSchemaAsync(context);
+        var schema = await _intentParser.GenerateSchemaAsync(context, cancellationToken);
 
         // Step 3: Create decision entity
         var decision = new DecisionV2(context, userId);
         decision.AssignSchema(schema);
 
-        // Step 4: Automatically analyze the decision immediately
-        var analysis = await _reasoningService.AnalyzeDecisionAsync(
-            decision.Context,
-            decision.Schema
-        );
+        // Step 4: Optionally analyze
+        if (analyzeNow)
+        {
+            try
+            {
+                var analysis = await _reasoningService.AnalyzeDecisionAsync(
+                    decision.Context,
+                    decision.Schema,
+                    cancellationToken
+                );
 
-        decision.StoreAnalysis(analysis);
+                decision.StoreAnalysis(analysis);
+            }
+            catch (Exception ex)
+            {
+                // Capture analysis failure but don't fail creation
+                // Log the proper error
+                Console.WriteLine($"[WARNING] Analysis failed during creation: {ex.Message}");
+                // Decision remains in Draft status
+            }
+        }
 
         return decision;
     }
@@ -71,11 +88,12 @@ public class DecisionServiceV2
     /// <summary>
     /// Analyzes a decision using AI reasoning
     /// </summary>
-    public async Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionV2 decision)
+    public async Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionV2 decision, CancellationToken cancellationToken = default)
     {
         var analysis = await _reasoningService.AnalyzeDecisionAsync(
             decision.Context,
-            decision.Schema
+            decision.Schema,
+            cancellationToken
         );
 
         decision.StoreAnalysis(analysis);
@@ -90,10 +108,11 @@ public class DecisionServiceV2
     public async Task<DecisionReplayResult> ReplayDecisionAsync(
         DecisionV2 decision,
         string updatedInput,
-        string userId)
+        string userId,
+        CancellationToken cancellationToken = default)
     {
         // Parse updated input
-        var updatedContext = await _intentParser.ParseInputAsync(updatedInput, userId);
+        var updatedContext = await _intentParser.ParseInputAsync(updatedInput, userId, cancellationToken);
 
         // Get original analysis
         if (decision.Analysis == null)
@@ -104,7 +123,8 @@ public class DecisionServiceV2
             decision.Id,
             decision.Context,
             decision.Analysis,
-            updatedContext
+            updatedContext,
+            cancellationToken
         );
 
         // Update decision with new context and analysis
@@ -141,8 +161,8 @@ public class DecisionServiceV2
     /// <summary>
     /// Queries AI about a specific decision
     /// </summary>
-    public async Task<string> QueryDecisionAsync(DecisionV2 decision, string question)
+    public async Task<string> QueryDecisionAsync(DecisionV2 decision, string question, CancellationToken cancellationToken = default)
     {
-        return await _reasoningService.QueryDecisionAsync(decision.Context, question);
+        return await _reasoningService.QueryDecisionAsync(decision.Context, question, cancellationToken);
     }
 }
