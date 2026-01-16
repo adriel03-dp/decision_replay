@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("DecisionReplay.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+faef67921a5a3515592e32cbadcbf2b1c7e0face")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+03d1646db2aa3eba393e465ac8ea5464ea1b4d46")]
 [assembly: System.Reflection.AssemblyProductAttribute("DecisionReplay.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("DecisionReplay.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
