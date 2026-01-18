@@ -6,6 +6,7 @@ using DecisionReplay.API.DTOs;
 using DecisionReplay.API.Mapping;
 using DecisionReplay.Domain.Entities;
 using DecisionReplay.Domain.ValueObjects;
+using System.Security.Claims;
 using System.Threading;
 using System.Threading.Tasks;
 
@@ -75,7 +76,7 @@ public class DecisionsV2Controller : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Input))
         {
             _logger.LogWarning("Create decision failed: empty input from user {User}", User.Identity?.Name);
-            return BadRequest(new { error = "Input cannot be empty. Provide a natural language description of your decision." });
+            return BadRequest(new { error = "ValidationError", message = "Input cannot be empty. Provide a natural language description of your decision." });
         }
 
         // Validate input content and detect domain
@@ -83,12 +84,13 @@ public class DecisionsV2Controller : ControllerBase
         if (!validationResult.IsValid)
         {
             _logger.LogWarning("Input validation failed for user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
-            return BadRequest(new { error = validationResult.ErrorMessage });
+            return BadRequest(new { error = "ValidationError", message = validationResult.ErrorMessage });
         }
 
         try
         {
-            var userId = User.Identity?.Name ?? request.CreatedBy;
+            // Extract user ID from JWT claim (NameIdentifier contains user ID, Name contains display name)
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? request.CreatedBy;
             _logger.LogInformation("Creating decision for user {User} in domain: {Domain}", userId, validationResult.DomainType);
 
             // Use sanitized input for decision creation
@@ -122,9 +124,9 @@ public class DecisionsV2Controller : ControllerBase
             var userMessage = GetUserFriendlyErrorMessage(ex);
             return StatusCode(500, new
             {
-                error = "Unable to create decision",
+                error = "InternalServerError",
                 message = userMessage,
-                canRetry = true
+                timestamp = DateTime.UtcNow
             });
         }
     }
@@ -198,7 +200,7 @@ public class DecisionsV2Controller : ControllerBase
         {
             _logger.LogError("Decision {DecisionId} has NULL Context! CreatedBy: {CreatedBy}, Status: {Status}",
                 id, decision.CreatedBy, decision.Status);
-            return StatusCode(500, new { error = "Decision data is corrupted (null context)" });
+            return StatusCode(500, new { error = "InternalServerError", message = "Decision data is corrupted (null context)", timestamp = DateTime.UtcNow });
         }
 
         return Ok(decision.ToResponse());
@@ -217,7 +219,7 @@ public class DecisionsV2Controller : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Input))
         {
             _logger.LogWarning("Temporary analysis failed: empty input from user {User}", User.Identity?.Name);
-            return BadRequest(new { error = "Input cannot be empty. Provide a natural language description of your decision." });
+            return BadRequest(new { error = "ValidationError", message = "Input cannot be empty. Provide a natural language description of your decision." });
         }
 
         // Validate input content and detect domain
@@ -225,12 +227,13 @@ public class DecisionsV2Controller : ControllerBase
         if (!validationResult.IsValid)
         {
             _logger.LogWarning("Input validation failed for temporary analysis, user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
-            return BadRequest(new { error = validationResult.ErrorMessage });
+            return BadRequest(new { error = "ValidationError", message = validationResult.ErrorMessage });
         }
 
         try
         {
-            var userId = User.Identity?.Name ?? request.CreatedBy;
+            // Extract user ID from JWT claim (NameIdentifier contains user ID, Name contains display name)
+            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? request.CreatedBy;
             _logger.LogInformation("Creating temporary analysis for user {User} in domain: {Domain}", userId, validationResult.DomainType);
 
             // Use sanitized input for analysis
@@ -303,9 +306,12 @@ public class DecisionsV2Controller : ControllerBase
                     assumptions = decision.Analysis.Assumptions ?? new List<string>(),
                     recommendations = decision.Analysis.Recommendations ?? new List<string>(),
 
+                    // Chart data for visualization
+                    chartData = GenerateChartDataForResponse(decision.Analysis),
+
                     // Metadata
                     timestamp = DateTime.UtcNow,
-                    modelUsed = decision.Analysis.ModelUsed ?? "Gemini-2.5-Flash"
+                    modelUsed = decision.Analysis.ModelUsed ?? "gemini-1.5-flash"
                 });
             }
             else
@@ -325,9 +331,9 @@ public class DecisionsV2Controller : ControllerBase
             var userMessage = GetUserFriendlyErrorMessage(ex);
             return StatusCode(500, new
             {
-                error = "Unable to analyze decision",
+                error = "InternalServerError",
                 message = userMessage,
-                canRetry = true
+                timestamp = DateTime.UtcNow
             });
         }
     }
@@ -368,7 +374,7 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
         }
     }
 
@@ -401,7 +407,7 @@ public class DecisionsV2Controller : ControllerBase
             return NotFound(new { error = "Decision not found" });
 
         if (string.IsNullOrWhiteSpace(request.UpdatedInput))
-            return BadRequest(new { error = "Updated input cannot be empty" });
+            return BadRequest(new { error = "ValidationError", message = "Updated input cannot be empty" });
 
         try
         {
@@ -416,7 +422,7 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
         }
     }
 
@@ -438,7 +444,7 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
         }
     }
 
@@ -607,7 +613,7 @@ public class DecisionsV2Controller : ControllerBase
             return NotFound(new { error = "Decision not found" });
 
         if (string.IsNullOrWhiteSpace(request.Question))
-            return BadRequest(new { error = "Question cannot be empty" });
+            return BadRequest(new { error = "ValidationError", message = "Question cannot be empty" });
 
         try
         {
@@ -616,7 +622,7 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = ex.Message });
+            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
         }
     }
 
@@ -639,7 +645,7 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { error = ex.Message });
+            return BadRequest(new { error = "BadRequest", message = ex.Message });
         }
     }
 
@@ -652,6 +658,42 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decisions = await _repository.GetAllAsync();
         return Ok(decisions.Select(d => d.ToResponse()).ToList());
+    }
+
+    /// <summary>
+    /// Generate chart data in response format for anonymous objects
+    /// </summary>
+    private object? GenerateChartDataForResponse(DecisionAnalysis analysis)
+    {
+        var chartData = analysis.GenerateChartData();
+        if (chartData == null) return null;
+
+        return new
+        {
+            timeline = chartData.Timeline.Select(t => new
+            {
+                time = t.Time,
+                feasibilityScore = t.FeasibilityScore,
+                timelinePressure = t.TimelinePressure,
+                resourceAdequacy = t.ResourceAdequacy,
+                scopeComplexity = t.ScopeComplexity
+            }).ToList(),
+            performance = chartData.Performance.Select(p => new
+            {
+                resource = p.Resource,
+                allocated = p.Allocated,
+                required = p.Required,
+                gap = p.Gap
+            }).ToList(),
+            riskHeatmap = chartData.RiskHeatmap.Select(r => new
+            {
+                factor = r.Factor,
+                impact = r.Impact,
+                status = r.Status,
+                trend = r.Trend,
+                description = r.Description
+            }).ToList()
+        };
     }
 
     /// <summary>
