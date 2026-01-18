@@ -1,5 +1,6 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Net;
@@ -29,13 +30,15 @@ public class GeminiIntentParser : IIntentParser
 {
     private readonly HttpClient _httpClient;
     private readonly List<string> _apiKeys;
+    private readonly ILogger<GeminiIntentParser> _logger;
     private static int _globalCurrentKeyIndex = 0;  // Shared across all instances
     private static readonly object _globalKeyRotationLock = new();  // Shared lock
 
-    public GeminiIntentParser(IHttpClientFactory httpClientFactory)
+    public GeminiIntentParser(IHttpClientFactory httpClientFactory, ILogger<GeminiIntentParser> logger)
     {
         _httpClient = httpClientFactory.CreateClient();
         _httpClient.Timeout = TimeSpan.FromSeconds(25); // Faster timeout for quicker feedback
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _apiKeys = new List<string>();
 
         var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
@@ -46,7 +49,7 @@ public class GeminiIntentParser : IIntentParser
         if (!string.IsNullOrEmpty(key2)) _apiKeys.Add(key2);
         if (!string.IsNullOrEmpty(key3)) _apiKeys.Add(key3);
 
-        Console.WriteLine($"[GEMINI INIT] Intent Parser loaded {_apiKeys.Count} API key(s)");
+        _logger.LogInformation("[GEMINI INIT] Intent Parser loaded {KeyCount} API key(s)", _apiKeys.Count);
     }
 
     public async Task<DecisionContext> ParseInputAsync(string naturalLanguageInput, string userId, CancellationToken cancellationToken = default)
@@ -68,11 +71,11 @@ public class GeminiIntentParser : IIntentParser
 
         try
         {
-            Console.WriteLine($"[GEMINI] Starting intent parsing for input: {naturalLanguageInput.Substring(0, Math.Min(50, naturalLanguageInput.Length))}...");
+            _logger.LogInformation("[GEMINI] Starting intent parsing for input: {InputPreview}...", naturalLanguageInput.Substring(0, Math.Min(50, naturalLanguageInput.Length)));
             var prompt = BuildIntentParsingPrompt(naturalLanguageInput);
-            Console.WriteLine("[GEMINI] Calling Gemini API for intent parsing...");
+            _logger.LogInformation("[GEMINI] Calling Gemini API for intent parsing...");
             var response = await CallGeminiApiAsync(prompt, cancellationToken);
-            Console.WriteLine($"[GEMINI] Received response: {response.Substring(0, Math.Min(100, response.Length))}...");
+            _logger.LogDebug("[GEMINI] Received response: {ResponsePreview}...", response.Substring(0, Math.Min(100, response.Length)));
             var parsed = ParseGeminiResponse(response);
 
             foreach (var kvp in parsed)
@@ -87,7 +90,7 @@ public class GeminiIntentParser : IIntentParser
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[GEMINI] Intent parsing failed: {ex.Message}. Using fallback.");
+            _logger.LogWarning(ex, "[GEMINI] Intent parsing failed: {ErrorMessage}. Using fallback.", ex.Message);
 
             // Fallback
             inferredAttributes["domain"] = "Unknown";
@@ -128,7 +131,7 @@ public class GeminiIntentParser : IIntentParser
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Schema generation failed: {ex.Message}. Using fallback.");
+            _logger.LogWarning(ex, "Schema generation failed: {ErrorMessage}. Using fallback.", ex.Message);
             fields["input"] = "Original user input";
             fields["error"] = ex.Message;
             return new DecisionSchema(domainType, fields);
@@ -187,11 +190,17 @@ Provide 5-8 relevant fields for {domain}.";
             {
                 temperature = 0.7,
                 maxOutputTokens = 1024
+            },
+            safetySettings = new[]
+            {
+                new { category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_NONE" },
+                new { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "BLOCK_NONE" },
+                new { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "BLOCK_NONE" },
+                new { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_NONE" }
             }
         };
 
         var json = JsonSerializer.Serialize(requestBody);
-        var content = new StringContent(json, Encoding.UTF8, "application/json");
 
         Exception? lastException = null;
 
@@ -200,12 +209,14 @@ Provide 5-8 relevant fields for {domain}.";
             var apiKey = GetCurrentApiKey();
             var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
 
-            Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{_globalCurrentKeyIndex + 1}");
+            _logger.LogDebug("[GEMINI] Attempt {Attempt}/{TotalAttempts} with key #{KeyIndex}", attempt + 1, _apiKeys.Count, _globalCurrentKeyIndex + 1);
 
             try
             {
+                // Create fresh content per attempt (do not reuse HttpContent across requests)
+                using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var response = await _httpClient.PostAsync(url, content, cancellationToken);
-                Console.WriteLine($"[GEMINI] Response status: {response.StatusCode}");
+                _logger.LogDebug("[GEMINI] Response status: {StatusCode}", response.StatusCode);
 
                 if (response.IsSuccessStatusCode)
                 {
@@ -216,8 +227,8 @@ Provide 5-8 relevant fields for {domain}.";
                 else
                 {
                     var error = await response.Content.ReadAsStringAsync();
-                    Console.WriteLine($"[GEMINI ERROR] Key #{_globalCurrentKeyIndex + 1}: {response.StatusCode}");
-                    Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
+                    _logger.LogWarning("[GEMINI ERROR] Key #{KeyIndex}: {StatusCode}", _globalCurrentKeyIndex + 1, response.StatusCode);
+                    _logger.LogWarning("[GEMINI ERROR] Response: {ErrorPreview}", error.Substring(0, Math.Min(200, error.Length)));
 
                     lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
 
@@ -228,7 +239,7 @@ Provide 5-8 relevant fields for {domain}.";
                         response.StatusCode == HttpStatusCode.InternalServerError)
                     {
                         RotateApiKey();
-                        Console.WriteLine($"[GEMINI] Rotated to key #{_globalCurrentKeyIndex + 1} due to {response.StatusCode}");
+                        _logger.LogInformation("[GEMINI] Rotated to key #{KeyIndex} due to {StatusCode}", _globalCurrentKeyIndex + 1, response.StatusCode);
                         continue; // Try next key
                     }
                     else
@@ -239,13 +250,13 @@ Provide 5-8 relevant fields for {domain}.";
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"[GEMINI ERROR] Key #{_globalCurrentKeyIndex + 1} exception: {ex.Message}");
+                _logger.LogError(ex, "[GEMINI ERROR] Key #{KeyIndex} exception: {ErrorMessage}", _globalCurrentKeyIndex + 1, ex.Message);
                 lastException = ex;
                 RotateApiKey();
             }
         }
 
-        Console.WriteLine($"[GEMINI ERROR] All {_apiKeys.Count} API keys exhausted");
+        _logger.LogError("[GEMINI ERROR] All {KeyCount} API keys exhausted", _apiKeys.Count);
         throw lastException ?? new Exception("All API keys failed");
     }
 
@@ -288,7 +299,7 @@ Provide 5-8 relevant fields for {domain}.";
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to parse Gemini response: {ex.Message}");
+            _logger.LogWarning(ex, "Failed to parse Gemini response: {ErrorMessage}", ex.Message);
             result["rawResponse"] = response;
         }
 
@@ -331,7 +342,7 @@ Provide 5-8 relevant fields for {domain}.";
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Failed to parse schema fields: {ex.Message}");
+            _logger.LogWarning(ex, "Failed to parse schema fields: {ErrorMessage}", ex.Message);
         }
 
         return result;
@@ -341,7 +352,9 @@ Provide 5-8 relevant fields for {domain}.";
     {
         lock (_globalKeyRotationLock)
         {
-            return _apiKeys[_globalCurrentKeyIndex];
+            if (_apiKeys.Count == 0)
+                throw new InvalidOperationException("No API keys configured. Please set GEMINI_API_KEY environment variable(s).");
+            return _apiKeys[_globalCurrentKeyIndex % _apiKeys.Count];
         }
     }
 
