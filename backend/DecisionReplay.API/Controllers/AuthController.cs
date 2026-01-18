@@ -33,7 +33,7 @@ public class AuthController : ControllerBase
 
         if (!success || user == null || token == null)
         {
-            return BadRequest(new { message = error ?? "Registration failed" });
+            return BadRequest(new { error = "RegistrationFailed", message = error ?? "Registration failed" });
         }
 
         var response = new AuthResponse
@@ -62,7 +62,7 @@ public class AuthController : ControllerBase
 
         if (!success || user == null || token == null)
         {
-            return Unauthorized(new { message = error ?? "Login failed" });
+            return Unauthorized(new { error = "AuthenticationFailed", message = error ?? "Login failed" });
         }
 
         var response = new AuthResponse
@@ -88,14 +88,14 @@ public class AuthController : ControllerBase
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
         {
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { error = "Unauthorized", message = "Invalid token" });
         }
 
         var (success, user, error) = await _authService.UpdateProfileAsync(userId, request.Name);
 
         if (!success || user == null)
         {
-            return BadRequest(new { message = error ?? "Update failed" });
+            return BadRequest(new { error = "UpdateFailed", message = error ?? "Update failed" });
         }
 
         return Ok(new { name = user.Name, email = user.Email });
@@ -113,7 +113,7 @@ public class AuthController : ControllerBase
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
         {
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { error = "Unauthorized", message = "Invalid token" });
         }
 
         var (success, error) = await _authService.ChangePasswordAsync(
@@ -124,7 +124,7 @@ public class AuthController : ControllerBase
 
         if (!success)
         {
-            return BadRequest(new { message = error ?? "Password change failed" });
+            return BadRequest(new { error = "PasswordChangeFailed", message = error ?? "Password change failed" });
         }
 
         return Ok(new { message = "Password updated successfully" });
@@ -142,14 +142,14 @@ public class AuthController : ControllerBase
         var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
         if (string.IsNullOrEmpty(userId))
         {
-            return Unauthorized(new { message = "Invalid token" });
+            return Unauthorized(new { error = "Unauthorized", message = "Invalid token" });
         }
 
         var (success, error) = await _authService.DeleteAccountAsync(userId, request.Password);
 
         if (!success)
         {
-            return BadRequest(new { message = error ?? "Account deletion failed" });
+            return BadRequest(new { error = "AccountDeletionFailed", message = error ?? "Account deletion failed" });
         }
 
         return Ok(new { message = "Account deleted successfully" });
