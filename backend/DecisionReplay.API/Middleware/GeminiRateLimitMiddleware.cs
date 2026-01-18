@@ -1,4 +1,5 @@
 using System.Collections.Concurrent;
+using System.Security.Claims;
 
 namespace DecisionReplay.API.Middleware;
 
@@ -55,8 +56,10 @@ public class GeminiRateLimitMiddleware
             return;
         }
 
-        // Extract user identifier (email from JWT claims or IP address as fallback)
-        var userId = context.User.Identity?.Name ?? context.Connection.RemoteIpAddress?.ToString() ?? "anonymous";
+        // Extract user identifier (user ID from JWT claims or IP address as fallback)
+        var userId = context.User.FindFirst(ClaimTypes.NameIdentifier)?.Value 
+            ?? context.Connection.RemoteIpAddress?.ToString() 
+            ?? "anonymous";
 
         // Get or create rate limit data for user
         var rateLimitData = _userLimits.GetOrAdd(userId, _ => new UserRateLimitData());
