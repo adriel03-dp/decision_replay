@@ -1,6 +1,7 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.Entities;
 using Microsoft.Extensions.Http;
+using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 
@@ -10,14 +11,16 @@ public class GeminiReasoningService : IAIReasoningService
 {
     private readonly HttpClient _httpClient;
     private readonly string? _apiKey;
+    private readonly ILogger<GeminiReasoningService> _logger;
     private static readonly SemaphoreSlim _rateLimiter = new(5, 5); // 5 concurrent requests max
     private static readonly Queue<DateTime> _requestTimes = new();
     private static readonly int _maxRequestsPerMinute = 5;
 
-    public GeminiReasoningService(IHttpClientFactory httpClientFactory)
+    public GeminiReasoningService(IHttpClientFactory httpClientFactory, ILogger<GeminiReasoningService> logger)
     {
         _httpClient = httpClientFactory.CreateClient();
         _apiKey = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     private async Task WaitForRateLimitAsync()
@@ -40,7 +43,7 @@ public class GeminiReasoningService : IAIReasoningService
                 var waitTime = TimeSpan.FromMinutes(1) - (now - oldestRequest);
                 if (waitTime.TotalMilliseconds > 0)
                 {
-                    Console.WriteLine($"Rate limit reached. Waiting {waitTime.TotalSeconds:F0} seconds...");
+                    _logger.LogWarning("Rate limit reached. Waiting {WaitSeconds:F0} seconds...", waitTime.TotalSeconds);
                     await Task.Delay(waitTime);
                 }
                 _requestTimes.Dequeue();
@@ -58,7 +61,7 @@ public class GeminiReasoningService : IAIReasoningService
     {
         if (string.IsNullOrEmpty(_apiKey))
         {
-            Console.WriteLine("Gemini API key not configured. Returning placeholder.");
+            _logger.LogWarning("Gemini API key not configured. Returning placeholder.");
             return new
             {
                 DecisionId = decision.Id,
@@ -127,15 +130,15 @@ Be specific and honest. If the plan is unrealistic, say so clearly with concrete
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={_apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_apiKey}";
 
-            Console.WriteLine($"Calling Gemini API for decision {decision.Id}...");
-            var response = await _httpClient.PostAsync(url, content);
+            _logger.LogInformation("Calling Gemini API for decision {DecisionId}...", decision.Id);
+            var response = await _httpClient.PostAsync(url, content, CancellationToken.None);
 
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Gemini API error: {response.StatusCode} - {error}");
+                _logger.LogError("Gemini API error: {StatusCode} - {Error}", response.StatusCode, error);
                 throw new Exception($"Gemini API returned {response.StatusCode}: {error}");
             }
 
@@ -144,7 +147,7 @@ Be specific and honest. If the plan is unrealistic, say so clearly with concrete
 
             var generatedText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "No response generated";
 
-            Console.WriteLine($"Gemini API response received for decision {decision.Id}");
+            _logger.LogInformation("Gemini API response received for decision {DecisionId}", decision.Id);
 
             return new
             {
@@ -153,12 +156,12 @@ Be specific and honest. If the plan is unrealistic, say so clearly with concrete
                 Recommendation = "See analysis for details",
                 Confidence = 0.85,
                 GeneratedAt = DateTime.UtcNow,
-                Model = "gemini-pro"
+                Model = "gemini-1.5-flash"
             };
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error generating reasoning: {ex.Message}");
+            _logger.LogError(ex, "Error generating reasoning: {ErrorMessage}", ex.Message);
             return new
             {
                 DecisionId = decision.Id,
@@ -250,14 +253,14 @@ Guidelines:
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={_apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_apiKey}";
 
-            var response = await _httpClient.PostAsync(url, content);
+            var response = await _httpClient.PostAsync(url, content, CancellationToken.None);
 
             if (!response.IsSuccessStatusCode)
             {
                 var error = await response.Content.ReadAsStringAsync();
-                Console.WriteLine($"Gemini API error: {response.StatusCode} - {error}");
+                _logger.LogError("Gemini API error: {StatusCode} - {Error}", response.StatusCode, error);
                 throw new Exception($"Gemini API returned {response.StatusCode}");
             }
 
@@ -276,7 +279,7 @@ Guidelines:
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Error answering query: {ex.Message}");
+            _logger.LogError(ex, "Error answering query: {ErrorMessage}", ex.Message);
             return new
             {
                 Response = $"Failed to process query: {ex.Message}",

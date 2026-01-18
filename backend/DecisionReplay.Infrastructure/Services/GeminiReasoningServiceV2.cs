@@ -535,7 +535,10 @@ ANSWER (decision-scoped only):";
     private string ValidateImpact(string? impact)
     {
         var validImpacts = new[] { "HIGH", "MEDIUM", "LOW" };
-        return validImpacts.Contains(impact?.ToUpper()) ? impact.ToUpper() : "MEDIUM";
+        if (string.IsNullOrEmpty(impact))
+            return "MEDIUM";
+        var upperImpact = impact.ToUpper();
+        return validImpacts.Contains(upperImpact) ? upperImpact : "MEDIUM";
     }
 
     private DecisionAnalysis CreatePlaceholderAnalysis(string message)
@@ -600,7 +603,7 @@ ANSWER (decision-scoped only):";
         }
     }
 
-    private async Task<int> GetAvailableKeyIndexAsync()
+    private Task<int> GetAvailableKeyIndexAsync()
     {
         lock (_globalKeyRotationLock)
         {
@@ -617,12 +620,12 @@ ANSWER (decision-scoped only):";
                 if (_apiKeyStates[idx].AvailableAtUtc <= now && _apiKeyStates[idx].RecentRequests.Count < MaxRequestsPerMinute)
                 {
                     _globalCurrentKeyIndex = idx; // start next search from this key
-                    return idx;
+                    return Task.FromResult(idx);
                 }
             }
         }
 
-        return -1; // none available
+        return Task.FromResult(-1); // none available
     }
 
     private void SetKeyCooldown(int index, TimeSpan? overrideCooldown = null)
