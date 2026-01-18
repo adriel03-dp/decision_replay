@@ -1,6 +1,7 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.Entities;
 using DecisionReplay.Domain.ValueObjects;
+using Microsoft.Extensions.Logging;
 using System;
 using System.Threading;
 using System.Threading.Tasks;
@@ -31,17 +32,20 @@ public class DecisionServiceV2
     private readonly IAIReasoningServiceV2 _reasoningService;
     private readonly IReplayEngine _replayEngine;
     private readonly IVisualizationProvider _visualizationProvider;
+    private readonly ILogger<DecisionServiceV2> _logger;
 
     public DecisionServiceV2(
         IIntentParser intentParser,
         IAIReasoningServiceV2 reasoningService,
         IReplayEngine replayEngine,
-        IVisualizationProvider visualizationProvider)
+        IVisualizationProvider visualizationProvider,
+        ILogger<DecisionServiceV2> logger)
     {
         _intentParser = intentParser ?? throw new ArgumentNullException(nameof(intentParser));
         _reasoningService = reasoningService ?? throw new ArgumentNullException(nameof(reasoningService));
         _replayEngine = replayEngine ?? throw new ArgumentNullException(nameof(replayEngine));
         _visualizationProvider = visualizationProvider ?? throw new ArgumentNullException(nameof(visualizationProvider));
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
     /// <summary>
@@ -77,7 +81,7 @@ public class DecisionServiceV2
             {
                 // Capture analysis failure but don't fail creation
                 // Log the proper error
-                Console.WriteLine($"[WARNING] Analysis failed during creation: {ex.Message}");
+                _logger.LogWarning(ex, "[WARNING] Analysis failed during creation: {ErrorMessage}", ex.Message);
                 // Decision remains in Draft status
             }
         }
