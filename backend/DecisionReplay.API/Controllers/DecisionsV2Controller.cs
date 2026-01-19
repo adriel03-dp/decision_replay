@@ -311,15 +311,23 @@ public class DecisionsV2Controller : ControllerBase
 
                     // Metadata
                     timestamp = DateTime.UtcNow,
-                    modelUsed = decision.Analysis.ModelUsed ?? "gemini-1.5-flash"
+                    modelUsed = decision.Analysis.ModelUsed ?? "gemini-1.5-flash",
+                    comparison = decision.Analysis.Comparison != null ? new
+                    {
+                        mainDifferences = decision.Analysis.Comparison.MainDifferences,
+                        tradeoffs = decision.Analysis.Comparison.Tradeoffs,
+                        whyOptimizedIsBetter = decision.Analysis.Comparison.WhyOptimizedIsBetter
+                    } : null
                 });
             }
             else
             {
                 return Ok(new
                 {
-                    reasoning = "Analysis completed successfully. The decision context has been parsed and evaluated.",
+                    reasoning = "Analysis completed. Basic context assessment only.",
                     domainType = validationResult.DomainType,
+                    generatedAt = DateTime.UtcNow,
+                    modelUsed = "gemini-1.5-flash",
                     timestamp = DateTime.UtcNow
                 });
             }
