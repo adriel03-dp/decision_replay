@@ -22,7 +22,9 @@ public static class DecisionV2Mapping
             decision.Outcome.ToString(),
             decision.CreatedAt,
             decision.LastModifiedAt,
-            decision.CreatedBy
+            decision.CreatedBy,
+            decision.Analysis?.ToResponse(),
+            decision.Analysis?.FeasibilityScore
         );
     }
 
