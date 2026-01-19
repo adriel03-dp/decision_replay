@@ -25,7 +25,9 @@ public record DecisionV2Response(
     string Outcome,
     DateTime CreatedAt,
     DateTime? LastModifiedAt,
-    string CreatedBy
+    string CreatedBy,
+    AnalysisResponse? Analysis = null,
+    double? FeasibilityScore = null
 );
 
 /// <summary>
