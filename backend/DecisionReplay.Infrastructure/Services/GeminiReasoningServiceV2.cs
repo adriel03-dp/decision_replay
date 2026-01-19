@@ -33,37 +33,43 @@ namespace DecisionReplay.Infrastructure.Services;
 public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 {
     private readonly HttpClient _httpClient;
-    private readonly List<string> _apiKeys;
-    private static int _globalCurrentKeyIndex = 0;  // Shared across all instances
-    private static readonly object _globalKeyRotationLock = new();  // Shared lock
-    private readonly SemaphoreSlim _rateLimiter = new(8, 8); // Instance-based rate limiter
-    // Limit concurrent requests across all service instances to avoid hammering the API
-    private static readonly SemaphoreSlim _globalConcurrencyLimiter = new SemaphoreSlim(4, 4);
-    private readonly List<KeyState> _apiKeyStates = new();
-    private readonly Queue<DateTime> _requestTimes = new(); // Instance-based request tracking
-    private const int MaxRequestsPerMinute = 15; // Match API key limit
+    private static readonly List<string> _apiKeys = new();
+    private static int _globalCurrentKeyIndex = 0;
+    private static readonly object _globalKeyRotationLock = new();
+    private static readonly SemaphoreSlim _instanceRateLimiter = new(8, 8);
+    private static readonly SemaphoreSlim _globalConcurrencyLimiter = new(4, 4);
+    private static readonly List<KeyState> _apiKeyStates = new();
+    private static readonly Queue<DateTime> _requestTimes = new();
+    private const int MaxRequestsPerMinute = 15;
+    private static bool _initialized = false;
 
     public GeminiReasoningServiceV2(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient();
         _httpClient.Timeout = TimeSpan.FromSeconds(45); // Increased for detailed analysis
-        _apiKeys = new List<string>();
 
-        var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
-        var key2 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_2");
-        var key3 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_3");
-
-        if (!string.IsNullOrEmpty(key1)) _apiKeys.Add(key1);
-        if (!string.IsNullOrEmpty(key2)) _apiKeys.Add(key2);
-        if (!string.IsNullOrEmpty(key3)) _apiKeys.Add(key3);
-
-        // Initialize per-key state
-        foreach (var k in _apiKeys)
+        lock (_globalKeyRotationLock)
         {
-            _apiKeyStates.Add(new KeyState { ApiKey = k });
-        }
+            if (!_initialized)
+            {
+                var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
+                var key2 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_2");
+                var key3 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_3");
 
-        Console.WriteLine($"[GEMINI INIT] Reasoning Service loaded {_apiKeys.Count} API key(s)");
+                if (!string.IsNullOrEmpty(key1)) _apiKeys.Add(key1);
+                if (!string.IsNullOrEmpty(key2)) _apiKeys.Add(key2);
+                if (!string.IsNullOrEmpty(key3)) _apiKeys.Add(key3);
+
+                // Initialize per-key state
+                foreach (var k in _apiKeys)
+                {
+                    _apiKeyStates.Add(new KeyState { ApiKey = k });
+                }
+
+                _initialized = true;
+                Console.WriteLine($"[GEMINI INIT] Reasoning Service initialized with {_apiKeys.Count} API key(s) (Static)");
+            }
+        }
     }
 
     public async Task<DecisionAnalysis> AnalyzeDecisionAsync(DecisionContext context, DecisionSchema? schema = null, CancellationToken cancellationToken = default)
@@ -354,7 +360,7 @@ ANSWER (decision-scoped only):";
                 }
 
                 var apiKey = _apiKeys[keyIndex];
-                var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key={apiKey}";
+                var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={apiKey}";
 
                 Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{keyIndex + 1}");
 
@@ -495,7 +501,7 @@ ANSWER (decision-scoped only):";
                         parsed.Assumptions ?? new List<string>(),
                         parsed.Recommendations ?? new List<string>(),
                         Math.Max(0.0, Math.Min(1.0, parsed.ConfidenceLevel)), // Clamp to 0-1
-                        "gemini-2.5-flash"
+                        "gemini-1.5-flash"
                     )
                     {
                         CurrentPlanAnalysis = parsed.CurrentPlanAnalysis != null ? new CurrentPlanAnalysis(
@@ -559,31 +565,35 @@ ANSWER (decision-scoped only):";
 
     private async Task WaitForRateLimitAsync(CancellationToken cancellationToken = default)
     {
-        await _rateLimiter.WaitAsync(cancellationToken);
+        await _instanceRateLimiter.WaitAsync(cancellationToken);
         try
         {
-            var now = DateTime.UtcNow;
-            while (_requestTimes.Count > 0 && (now - _requestTimes.Peek()).TotalMinutes >= 1)
+            lock (_globalKeyRotationLock)
             {
-                _requestTimes.Dequeue();
-            }
-
-            if (_requestTimes.Count >= MaxRequestsPerMinute)
-            {
-                var oldestRequest = _requestTimes.Peek();
-                var waitTime = TimeSpan.FromMinutes(1) - (now - oldestRequest);
-                if (waitTime.TotalMilliseconds > 0)
+                var now = DateTime.UtcNow;
+                while (_requestTimes.Count > 0 && (now - _requestTimes.Peek()).TotalMinutes >= 1)
                 {
-                    await Task.Delay(waitTime);
+                    _requestTimes.Dequeue();
                 }
-                _requestTimes.Dequeue();
-            }
 
-            _requestTimes.Enqueue(now);
+                if (_requestTimes.Count >= MaxRequestsPerMinute * Math.Max(1, _apiKeys.Count))
+                {
+                    var oldestRequest = _requestTimes.Peek();
+                    var waitTime = TimeSpan.FromMinutes(1) - (now - oldestRequest);
+                    if (waitTime.TotalMilliseconds > 0)
+                    {
+                        Console.WriteLine($"[GEMINI] Global rate limit reached. Waiting {waitTime.TotalSeconds:F1}s...");
+                        Task.Delay(waitTime).Wait(); // Lock-safe wait
+                    }
+                    _requestTimes.Dequeue();
+                }
+
+                _requestTimes.Enqueue(now);
+            }
         }
         finally
         {
-            _rateLimiter.Release();
+            _instanceRateLimiter.Release();
         }
     }
 
