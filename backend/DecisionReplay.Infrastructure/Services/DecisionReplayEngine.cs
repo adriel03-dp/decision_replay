@@ -157,7 +157,7 @@ public class DecisionReplayEngine : IReplayEngine
         // Fields that typically impact feasibility significantly
         var significantFields = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
-            "timeline", "resources", "constraints", "budget", "scope",
+            "timeline", "time", "resources", "constraints", "budget", "scope",
             "workforce", "materials", "deadline", "capacity"
         };
 

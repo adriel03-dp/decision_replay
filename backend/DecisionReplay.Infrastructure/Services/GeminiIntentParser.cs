@@ -148,15 +148,15 @@ JSON format:
 {{
   ""domain"": ""<DomainType>"",
   ""intent"": ""<What user wants to decide>"",
-  ""timeline"": ""<Duration or deadline if mentioned>"",
+  ""time"": ""<Duration or deadline if mentioned>"",
   ""budget"": ""<Budget if mentioned>"",
   ""resources"": ""<Team size or resources if mentioned>"",
   ""scope"": ""<Main objectives/deliverables>"",
   ""constraints"": [""<Key limitations>""],
   ""risks"": [""<Potential challenges>""]
 }}
-
-Use ""Not specified"" for missing info.";
+ 
+ Use ""Not specified"" for missing info.";
     }
 
     private string BuildSchemaGenerationPrompt(DecisionContext context)
@@ -188,15 +188,17 @@ Provide 5-8 relevant fields for {domain}.";
             },
             generationConfig = new
             {
-                temperature = 0.7,
+                temperature = 0.2,
+                topP = 0.8,
+                topK = 40,
                 maxOutputTokens = 1024
             },
             safetySettings = new[]
             {
-                new { category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_NONE" },
-                new { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "BLOCK_NONE" },
-                new { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "BLOCK_NONE" },
-                new { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_NONE" }
+                new { category = "HARM_CATEGORY_HARASSMENT", threshold = "BLOCK_ONLY_HIGH" },
+                new { category = "HARM_CATEGORY_HATE_SPEECH", threshold = "BLOCK_ONLY_HIGH" },
+                new { category = "HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold = "BLOCK_ONLY_HIGH" },
+                new { category = "HARM_CATEGORY_DANGEROUS_CONTENT", threshold = "BLOCK_ONLY_HIGH" }
             }
         };
 
@@ -204,23 +206,30 @@ Provide 5-8 relevant fields for {domain}.";
 
         Exception? lastException = null;
 
+        if (_apiKeys.Count == 0)
+        {
+            _logger.LogError("No Gemini API keys configured. Set GEMINI_API_KEY environment variable.");
+            throw new InvalidOperationException("Gemini API keys are not configured.");
+        }
+
         for (int attempt = 0; attempt < _apiKeys.Count; attempt++)
         {
             var apiKey = GetCurrentApiKey();
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={apiKey}";
 
             _logger.LogDebug("[GEMINI] Attempt {Attempt}/{TotalAttempts} with key #{KeyIndex}", attempt + 1, _apiKeys.Count, _globalCurrentKeyIndex + 1);
 
+            // Create content fresh for each attempt - HttpContent is not reusable
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
             try
             {
-                // Create fresh content per attempt (do not reuse HttpContent across requests)
-                using var content = new StringContent(json, Encoding.UTF8, "application/json");
                 var response = await _httpClient.PostAsync(url, content, cancellationToken);
                 _logger.LogDebug("[GEMINI] Response status: {StatusCode}", response.StatusCode);
 
                 if (response.IsSuccessStatusCode)
                 {
-                    var responseJson = await response.Content.ReadAsStringAsync();
+                    var responseJson = await response.Content.ReadAsStringAsync(cancellationToken);
                     var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
                     return geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
                 }
