@@ -28,6 +28,7 @@ public class DecisionAnalysis
     public double ConfidenceLevel { get; set; } // 0.0 - 1.0
     public DateTime GeneratedAt { get; set; }
     public string ModelUsed { get; set; }
+    public ComparisonLayer? Comparison { get; set; }
 
     public DecisionAnalysis()
     {
@@ -158,5 +159,24 @@ public class RiskFactor
         Description = description;
         Impact = impact.ToUpper();
         Mitigation = mitigation;
+    }
+}
+
+/// <summary>
+/// Value Object: Comparison between user plan and optimized plan
+/// </summary>
+public class ComparisonLayer
+{
+    public List<string> MainDifferences { get; set; } = new();
+    public List<string> Tradeoffs { get; set; } = new();
+    public string WhyOptimizedIsBetter { get; set; } = string.Empty;
+
+    public ComparisonLayer() { }
+
+    public ComparisonLayer(List<string> mainDifferences, List<string> tradeoffs, string whyOptimizedIsBetter)
+    {
+        MainDifferences = mainDifferences ?? new List<string>();
+        Tradeoffs = tradeoffs ?? new List<string>();
+        WhyOptimizedIsBetter = whyOptimizedIsBetter ?? string.Empty;
     }
 }
