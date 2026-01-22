@@ -130,7 +130,7 @@ Be specific and honest. If the plan is unrealistic, say so clearly with concrete
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={_apiKey}";
 
             _logger.LogInformation("Calling Gemini API for decision {DecisionId}...", decision.Id);
             var response = await _httpClient.PostAsync(url, content, CancellationToken.None);
@@ -253,7 +253,7 @@ Guidelines:
             var json = JsonSerializer.Serialize(requestBody);
             var content = new StringContent(json, Encoding.UTF8, "application/json");
 
-            var url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={_apiKey}";
+            var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={_apiKey}";
 
             var response = await _httpClient.PostAsync(url, content, CancellationToken.None);
 
