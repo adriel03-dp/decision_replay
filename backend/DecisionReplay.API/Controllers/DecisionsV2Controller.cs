@@ -76,7 +76,9 @@ public class DecisionsV2Controller : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Input))
         {
             _logger.LogWarning("Create decision failed: empty input from user {User}", User.Identity?.Name);
-            return BadRequest(new { error = "ValidationError", message = "Input cannot be empty. Provide a natural language description of your decision." });
+            return BadRequest(ErrorResponse.ValidationError(
+                "Input cannot be empty. Provide a natural language description of your decision.",
+                path: HttpContext.Request.Path));
         }
 
         // Validate input content and detect domain
@@ -84,7 +86,9 @@ public class DecisionsV2Controller : ControllerBase
         if (!validationResult.IsValid)
         {
             _logger.LogWarning("Input validation failed for user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
-            return BadRequest(new { error = "ValidationError", message = validationResult.ErrorMessage });
+            return BadRequest(ErrorResponse.ValidationError(
+                validationResult.ErrorMessage!,
+                path: HttpContext.Request.Path));
         }
 
         try
@@ -122,12 +126,9 @@ public class DecisionsV2Controller : ControllerBase
 
             // Return user-friendly error message
             var userMessage = GetUserFriendlyErrorMessage(ex);
-            return StatusCode(500, new
-            {
-                error = "InternalServerError",
-                message = userMessage,
-                timestamp = DateTime.UtcNow
-            });
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                userMessage,
+                HttpContext.Request.Path));
         }
     }
 
@@ -143,7 +144,9 @@ public class DecisionsV2Controller : ControllerBase
         var existing = await _repository.GetByIdAsync(id);
         if (existing == null)
         {
-            return NotFound(new { error = $"Decision {id} not found" });
+            return NotFound(ErrorResponse.NotFound(
+                $"Decision {id} not found",
+                HttpContext.Request.Path));
         }
 
         // Update context if new input provided (triggers re-analysis requirement)
@@ -191,7 +194,9 @@ public class DecisionsV2Controller : ControllerBase
         if (decision == null)
         {
             _logger.LogWarning("Decision {DecisionId} not found for user {User}", id, User.Identity?.Name);
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
         }
 
         _logger.LogInformation("Decision {DecisionId} found, Context is {IsNull}", id, decision.Context == null ? "NULL" : "NOT NULL");
@@ -200,7 +205,9 @@ public class DecisionsV2Controller : ControllerBase
         {
             _logger.LogError("Decision {DecisionId} has NULL Context! CreatedBy: {CreatedBy}, Status: {Status}",
                 id, decision.CreatedBy, decision.Status);
-            return StatusCode(500, new { error = "InternalServerError", message = "Decision data is corrupted (null context)", timestamp = DateTime.UtcNow });
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                "Decision data is corrupted (null context)",
+                HttpContext.Request.Path));
         }
 
         return Ok(decision.ToResponse());
@@ -219,7 +226,9 @@ public class DecisionsV2Controller : ControllerBase
         if (string.IsNullOrWhiteSpace(request.Input))
         {
             _logger.LogWarning("Temporary analysis failed: empty input from user {User}", User.Identity?.Name);
-            return BadRequest(new { error = "ValidationError", message = "Input cannot be empty. Provide a natural language description of your decision." });
+            return BadRequest(ErrorResponse.ValidationError(
+                "Input cannot be empty. Provide a natural language description of your decision.",
+                path: HttpContext.Request.Path));
         }
 
         // Validate input content and detect domain
@@ -227,7 +236,9 @@ public class DecisionsV2Controller : ControllerBase
         if (!validationResult.IsValid)
         {
             _logger.LogWarning("Input validation failed for temporary analysis, user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
-            return BadRequest(new { error = "ValidationError", message = validationResult.ErrorMessage });
+            return BadRequest(ErrorResponse.ValidationError(
+                validationResult.ErrorMessage!,
+                path: HttpContext.Request.Path));
         }
 
         try
@@ -337,12 +348,9 @@ public class DecisionsV2Controller : ControllerBase
             _logger.LogError(ex, "Failed to create temporary analysis for user {User}. Error: {Error}", User.Identity?.Name, ex.ToString());
 
             var userMessage = GetUserFriendlyErrorMessage(ex);
-            return StatusCode(500, new
-            {
-                error = "InternalServerError",
-                message = userMessage,
-                timestamp = DateTime.UtcNow
-            });
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                userMessage,
+                HttpContext.Request.Path));
         }
     }
 
@@ -355,10 +363,14 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         if (decision.Schema == null)
-            return NotFound(new { error = "Schema not generated yet" });
+            return NotFound(ErrorResponse.NotFound(
+                "Schema not generated yet",
+                HttpContext.Request.Path));
 
         return Ok(decision.Schema.ToResponse());
     }
@@ -372,7 +384,9 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         try
         {
@@ -382,7 +396,9 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                ex.Message,
+                HttpContext.Request.Path));
         }
     }
 
@@ -395,10 +411,14 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         if (decision.Analysis == null)
-            return NotFound(new { error = "Analysis not performed yet. Call POST /analyze first." });
+            return NotFound(ErrorResponse.NotFound(
+                "Analysis not performed yet. Call POST /analyze first.",
+                HttpContext.Request.Path));
 
         return Ok(decision.Analysis.ToResponse());
     }
@@ -412,10 +432,14 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         if (string.IsNullOrWhiteSpace(request.UpdatedInput))
-            return BadRequest(new { error = "ValidationError", message = "Updated input cannot be empty" });
+            return BadRequest(ErrorResponse.ValidationError(
+                "Updated input cannot be empty",
+                path: HttpContext.Request.Path));
 
         try
         {
@@ -430,7 +454,9 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                ex.Message,
+                HttpContext.Request.Path));
         }
     }
 
@@ -443,7 +469,9 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         try
         {
@@ -452,7 +480,9 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                ex.Message,
+                HttpContext.Request.Path));
         }
     }
 
@@ -465,10 +495,14 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         if (decision.Analysis == null)
-            return NotFound(new { error = "Analysis not performed yet. Call POST /analyze first." });
+            return NotFound(ErrorResponse.NotFound(
+                "Analysis not performed yet. Call POST /analyze first.",
+                HttpContext.Request.Path));
 
         // Generate analytics data from analysis
         var analytics = new
@@ -618,10 +652,14 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         if (string.IsNullOrWhiteSpace(request.Question))
-            return BadRequest(new { error = "ValidationError", message = "Question cannot be empty" });
+            return BadRequest(ErrorResponse.ValidationError(
+                "Question cannot be empty",
+                path: HttpContext.Request.Path));
 
         try
         {
@@ -630,7 +668,9 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (Exception ex)
         {
-            return StatusCode(500, new { error = "InternalServerError", message = ex.Message, timestamp = DateTime.UtcNow });
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                ex.Message,
+                HttpContext.Request.Path));
         }
     }
 
@@ -643,7 +683,9 @@ public class DecisionsV2Controller : ControllerBase
     {
         var decision = await _repository.GetByIdAsync(id);
         if (decision == null)
-            return NotFound(new { error = "Decision not found" });
+            return NotFound(ErrorResponse.NotFound(
+                "Decision not found",
+                HttpContext.Request.Path));
 
         try
         {
@@ -653,7 +695,9 @@ public class DecisionsV2Controller : ControllerBase
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(new { error = "BadRequest", message = ex.Message });
+            return BadRequest(ErrorResponse.BadRequest(
+                ex.Message,
+                HttpContext.Request.Path));
         }
     }
 
