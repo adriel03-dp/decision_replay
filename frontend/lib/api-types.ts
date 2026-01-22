@@ -11,6 +11,8 @@ export interface Decision {
   createdAt: string;
   lastModifiedAt?: string;
   createdBy: string;
+  analysis?: AnalysisResponse;
+  feasibilityScore?: number;
 }
 
 // V2 Analysis Response - matches AnalysisResponse from backend
