@@ -82,21 +82,21 @@ export default function DecisionAnalysisPage() {
   async function fetchDecision() {
     try {
       const controller = new AbortController()
-      const timeoutId = setTimeout(() => controller.abort(), 5000) // 5s timeout for faster feedback
-      
+      const timeoutId = setTimeout(() => controller.abort(), 15000) // 15s timeout for better reliability
+
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/${decisionId}`, {
         headers: {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         },
         signal: controller.signal
       })
-      
+
       clearTimeout(timeoutId)
-      
+
       if (response.ok) {
         const data = await response.json()
         setDecision(data)
-        
+
         // Try to fetch existing analysis
         await fetchExistingAnalysis()
       } else {
@@ -108,19 +108,19 @@ export default function DecisionAnalysisPage() {
         } catch {
           errorDetail = `HTTP ${response.status} - ${response.statusText}`
         }
-        
+
         console.error('API Error Details:', {
           status: response.status,
           statusText: response.statusText,
           url: `${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/${decisionId}`,
           detail: errorDetail
         })
-        
+
         throw new Error(`Failed to fetch decision: ${errorDetail}`)
       }
     } catch (error) {
       console.error('Failed to fetch decision:', error)
-      
+
       // Extract user-friendly error message
       let errorMessage = 'Failed to load decision.'
       if (error instanceof Error) {
@@ -130,13 +130,13 @@ export default function DecisionAnalysisPage() {
           errorMessage = error.message
         }
       }
-      
+
       toast({
         title: "Unable to Load Decision",
         description: errorMessage,
         variant: "destructive",
       })
-      
+
       // Redirect after showing error
       setTimeout(() => router.push('/decisions'), 2000)
     } finally {
@@ -151,7 +151,7 @@ export default function DecisionAnalysisPage() {
           'Authorization': `Bearer ${localStorage.getItem('token')}`
         }
       })
-      
+
       if (response.ok) {
         const analysisData = await response.json()
         setAnalysis(analysisData)
@@ -169,7 +169,7 @@ export default function DecisionAnalysisPage() {
 
   async function analyzeDecision() {
     if (analyzing) return
-    
+
     setAnalyzing(true)
     try {
       const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/${decisionId}/analyze`, {
@@ -188,13 +188,13 @@ export default function DecisionAnalysisPage() {
       setAnalysis(result)
     } catch (error) {
       console.error('Analysis failed:', error)
-      
+
       // Extract user-friendly error message  
       let errorMessage = 'Failed to analyze decision'
       if (error instanceof Error) {
         errorMessage = error.message
       }
-      
+
       toast({
         title: "Analysis Failed",
         description: errorMessage,
@@ -304,7 +304,7 @@ export default function DecisionAnalysisPage() {
             <p className="text-foreground/60 mb-4">
               Click below to get AI-powered feasibility analysis, risk identification, and recommendations.
             </p>
-            <Button 
+            <Button
               onClick={analyzeDecision}
               className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
             >
@@ -342,14 +342,13 @@ export default function DecisionAnalysisPage() {
               <div className="mb-3">
                 <div className="text-sm font-semibold mb-1">Verdict: {analysis.feasibilityVerdict}</div>
                 <div className="w-full bg-gray-200 dark:bg-slate-700 rounded-full h-2">
-                  <div 
-                    className={`h-2 rounded-full transition-all ${
-                      analysis.feasibilityScore >= 70 
-                        ? 'bg-green-500' 
-                        : analysis.feasibilityScore >= 40 
-                        ? 'bg-yellow-500' 
-                        : 'bg-red-500'
-                    }`}
+                  <div
+                    className={`h-2 rounded-full transition-all ${analysis.feasibilityScore >= 70
+                        ? 'bg-green-500'
+                        : analysis.feasibilityScore >= 40
+                          ? 'bg-yellow-500'
+                          : 'bg-red-500'
+                      }`}
                     style={{ width: `${analysis.feasibilityScore}%` }}
                   />
                 </div>
@@ -482,11 +481,10 @@ export default function DecisionAnalysisPage() {
                     <div key={idx} className="p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-100 dark:border-red-900/50">
                       <div className="flex items-start justify-between mb-1">
                         <span className="font-semibold text-sm">{risk.description}</span>
-                        <span className={`text-xs px-2 py-0.5 rounded-full ${
-                          risk.impact === 'HIGH' ? 'bg-red-200 dark:bg-red-900 text-red-900 dark:text-red-200' :
-                          risk.impact === 'MEDIUM' ? 'bg-yellow-200 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-200' :
-                          'bg-green-200 dark:bg-green-900 text-green-900 dark:text-green-200'
-                        }`}>
+                        <span className={`text-xs px-2 py-0.5 rounded-full ${risk.impact === 'HIGH' ? 'bg-red-200 dark:bg-red-900 text-red-900 dark:text-red-200' :
+                            risk.impact === 'MEDIUM' ? 'bg-yellow-200 dark:bg-yellow-900 text-yellow-900 dark:text-yellow-200' :
+                              'bg-green-200 dark:bg-green-900 text-green-900 dark:text-green-200'
+                          }`}>
                           {risk.impact} Impact
                         </span>
                       </div>
@@ -526,17 +524,17 @@ export default function DecisionAnalysisPage() {
                     <h2 className="text-xl font-bold">Visual Analytics</h2>
                     <span className="text-sm text-muted-foreground">Interactive charts based on AI analysis</span>
                   </div>
-                  
+
                   {/* Timeline Chart */}
                   {analysis.chartData.timeline && analysis.chartData.timeline.length > 0 && (
                     <AnimatedTimelineChart data={analysis.chartData.timeline} />
                   )}
-                  
+
                   {/* Resource Performance Chart */}
                   {analysis.chartData.performance && analysis.chartData.performance.length > 0 && (
                     <AnimatedPerformanceChart data={analysis.chartData.performance} />
                   )}
-                  
+
                   {/* Risk Factor Heatmap */}
                   {analysis.chartData.riskHeatmap && analysis.chartData.riskHeatmap.length > 0 && (
                     <AnimatedFactorHeatmap data={analysis.chartData.riskHeatmap} />
@@ -554,21 +552,21 @@ export default function DecisionAnalysisPage() {
                     <h2 className="text-xl font-bold">Visual Analytics</h2>
                     <span className="text-sm text-muted-foreground">Charts based on analysis data</span>
                   </div>
-                  
+
                   {/* Sample Timeline Chart */}
                   <AnimatedTimelineChart data={[
                     { time: "Initial", feasibilityScore: Math.max(0, analysis.feasibilityScore - 15), timelinePressure: 100 - analysis.feasibilityScore + 10, resourceAdequacy: analysis.feasibilityScore - 10, scopeComplexity: 100 - analysis.feasibilityScore },
                     { time: "Refined", feasibilityScore: analysis.feasibilityScore, timelinePressure: 100 - analysis.feasibilityScore, resourceAdequacy: analysis.feasibilityScore, scopeComplexity: 100 - analysis.feasibilityScore - 10 },
                     { time: "Optimized", feasibilityScore: Math.min(100, analysis.feasibilityScore + 10), timelinePressure: Math.max(0, 100 - analysis.feasibilityScore - 15), resourceAdequacy: Math.min(100, analysis.feasibilityScore + 15), scopeComplexity: Math.max(0, 100 - analysis.feasibilityScore - 20) }
                   ]} />
-                  
+
                   {/* Sample Performance Chart */}
                   <AnimatedPerformanceChart data={[
                     { resource: "Team Size", allocated: Math.round(analysis.feasibilityScore * 0.8), required: Math.round(analysis.feasibilityScore * 0.9), gap: Math.round(analysis.feasibilityScore * 0.1) },
                     { resource: "Budget (k$)", allocated: Math.round(analysis.feasibilityScore * 1.2), required: Math.round(analysis.feasibilityScore * 1.35), gap: Math.round(analysis.feasibilityScore * 0.15) },
                     { resource: "Timeline (weeks)", allocated: Math.round(analysis.feasibilityScore * 0.6), required: Math.round(analysis.feasibilityScore * 0.7), gap: Math.round(analysis.feasibilityScore * 0.1) }
                   ]} />
-                  
+
                   {/* Sample Risk Heatmap */}
                   <AnimatedFactorHeatmap data={[
                     ...analysis.risks.map(risk => ({
@@ -601,7 +599,7 @@ export default function DecisionAnalysisPage() {
                   className="flex-1 px-4 py-2 text-sm bg-white dark:bg-slate-800 border border-green-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent"
                   disabled={querying}
                 />
-                <Button 
+                <Button
                   onClick={askQuestion}
                   disabled={querying || !question.trim()}
                   className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700"
