@@ -40,7 +40,7 @@ public static class MongoDbConfiguration
         // Register ObjectSerializer to handle Dictionary<string, object> with specific types
         try
         {
-            var objectSerializer = new ObjectSerializer(type => ObjectSerializer.DefaultAllowedTypes(type) || type.FullName.StartsWith("System.Guid"));
+            var objectSerializer = new ObjectSerializer(type => ObjectSerializer.DefaultAllowedTypes(type) || (type.FullName != null && type.FullName.StartsWith("System.Guid")));
             BsonSerializer.RegisterSerializer(typeof(object), objectSerializer);
         }
         catch (BsonSerializationException)
