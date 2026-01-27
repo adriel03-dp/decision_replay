@@ -3,11 +3,11 @@
 import { useEffect, useState } from "react"
 import { useRouter } from "next/navigation"
 import Link from "next/link"
-import { 
+import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart, Pie, Cell, LineChart, Line, Legend, Area, AreaChart
 } from 'recharts'
-import { 
+import {
   TrendingUp, TrendingDown, BarChart3, PieChart as PieChartIcon,
   Activity, CheckCircle2, AlertTriangle, XCircle, Calendar,
   Target, Users, Brain, ArrowRight, Sparkles
@@ -17,26 +17,7 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { useAuth } from "@/lib/auth-context"
 import { useToast } from "@/hooks/use-toast"
-
-interface DecisionV2 {
-  id: string
-  context: {
-    summary: string
-    intent: string
-    priority: string
-  }
-  analysis?: {
-    feasibilityScore: number
-    confidenceLevel: number
-    executiveSummary: string
-    recommendations: string[]
-    risks: Array<{ description: string; impact: string }>
-  }
-  status: string
-  outcome: string
-  createdAt: string
-  domainType?: string
-}
+import { Decision } from "@/lib/api-types"
 
 interface AnalyticsData {
   totalDecisions: number
@@ -51,7 +32,7 @@ interface AnalyticsData {
 
 const DOMAIN_COLORS = {
   "Software Development": "#3b82f6",
-  "Business Strategy": "#10b981", 
+  "Business Strategy": "#10b981",
   "Finance": "#f59e0b",
   "Healthcare": "#ef4444",
   "Education": "#8b5cf6",
@@ -65,7 +46,7 @@ export default function AnalyticsPage() {
   const router = useRouter()
   const { user } = useAuth()
   const { toast } = useToast()
-  const [decisions, setDecisions] = useState<DecisionV2[]>([])
+  const [decisions, setDecisions] = useState<Decision[]>([])
   const [analytics, setAnalytics] = useState<AnalyticsData | null>(null)
   const [loading, setLoading] = useState(true)
 
@@ -106,7 +87,7 @@ export default function AnalyticsPage() {
     }
   }
 
-  const generateAnalytics = (decisions: DecisionV2[]) => {
+  const generateAnalytics = (decisions: Decision[]) => {
     // Basic stats
     const totalDecisions = decisions.length
     const decisionsWithScores = decisions.filter(d => d.analysis?.feasibilityScore)
@@ -160,11 +141,11 @@ export default function AnalyticsPage() {
       const month = date.toISOString().slice(0, 7)
       const monthDecisions = decisions.filter(d => d.createdAt.startsWith(month))
       const monthScores = monthDecisions.filter(d => d.analysis?.feasibilityScore)
-      
+
       monthlyTrends.push({
         month: date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' }),
         decisions: monthDecisions.length,
-        avgScore: monthScores.length > 0 
+        avgScore: monthScores.length > 0
           ? Math.round(monthScores.reduce((sum, d) => sum + (d.analysis?.feasibilityScore || 0), 0) / monthScores.length)
           : 0
       })
@@ -187,7 +168,7 @@ export default function AnalyticsPage() {
       const domainDecisions = decisions.filter(d => (d.domainType || 'General Planning') === domain.name)
       const decisionsWithRisks = domainDecisions.filter(d => d.analysis?.risks)
       const totalRisks = decisionsWithRisks.reduce((sum, d) => sum + (d.analysis?.risks?.length || 0), 0)
-      const highRiskCount = decisionsWithRisks.filter(d => 
+      const highRiskCount = decisionsWithRisks.filter(d =>
         d.analysis?.risks?.some(r => r.impact === 'HIGH')
       ).length
 
@@ -334,23 +315,23 @@ export default function AnalyticsPage() {
                   <CartesianGrid strokeDasharray="3 3" className="opacity-30" />
                   <XAxis dataKey="month" />
                   <YAxis />
-                  <Tooltip 
-                    contentStyle={{ 
-                      backgroundColor: 'rgba(255, 255, 255, 0.95)', 
+                  <Tooltip
+                    contentStyle={{
+                      backgroundColor: 'rgba(255, 255, 255, 0.95)',
                       border: '1px solid #e5e7eb',
                       borderRadius: '8px'
-                    }} 
+                    }}
                   />
-                  <Area 
-                    type="monotone" 
-                    dataKey="decisions" 
-                    stroke="#10b981" 
-                    fill="url(#colorDecisions)" 
+                  <Area
+                    type="monotone"
+                    dataKey="decisions"
+                    stroke="#10b981"
+                    fill="url(#colorDecisions)"
                   />
                   <defs>
                     <linearGradient id="colorDecisions" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8}/>
-                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.1}/>
+                      <stop offset="5%" stopColor="#10b981" stopOpacity={0.8} />
+                      <stop offset="95%" stopColor="#10b981" stopOpacity={0.1} />
                     </linearGradient>
                   </defs>
                 </AreaChart>
@@ -467,7 +448,7 @@ export default function AnalyticsPage() {
                       <td className="py-3 px-4">{domain.avgRisks}</td>
                       <td className="py-3 px-4">{domain.highRiskCount}</td>
                       <td className="py-3 px-4">
-                        <Badge 
+                        <Badge
                           variant={domain.highRiskCount > 2 ? "destructive" : domain.highRiskCount > 0 ? "secondary" : "default"}
                         >
                           {domain.highRiskCount > 2 ? "High" : domain.highRiskCount > 0 ? "Medium" : "Low"}
