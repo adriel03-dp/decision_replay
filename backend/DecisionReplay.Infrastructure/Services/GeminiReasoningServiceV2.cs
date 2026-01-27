@@ -1,7 +1,6 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.ValueObjects;
 using DecisionReplay.Domain.Entities;
-using Microsoft.Extensions.Logging;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -34,7 +33,6 @@ namespace DecisionReplay.Infrastructure.Services;
 public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 {
     private readonly HttpClient _httpClient;
-    private readonly ILogger<GeminiReasoningServiceV2> _logger;
     private static readonly List<string> _apiKeys = new();
     private static int _globalCurrentKeyIndex = 0;
     private static readonly object _globalKeyRotationLock = new();
@@ -45,11 +43,10 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
     private const int MaxRequestsPerMinute = 15;
     private static bool _initialized = false;
 
-    public GeminiReasoningServiceV2(IHttpClientFactory httpClientFactory, ILogger<GeminiReasoningServiceV2> logger)
+    public GeminiReasoningServiceV2(IHttpClientFactory httpClientFactory)
     {
         _httpClient = httpClientFactory.CreateClient();
         _httpClient.Timeout = TimeSpan.FromSeconds(45); // Increased for detailed analysis
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
 
         lock (_globalKeyRotationLock)
         {
@@ -70,7 +67,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
                 }
 
                 _initialized = true;
-                _logger.LogInformation("Gemini Reasoning Service initialized with {KeyCount} API key(s)", _apiKeys.Count);
+                Console.WriteLine($"[GEMINI INIT] Reasoning Service initialized with {_apiKeys.Count} API key(s) (Static)");
             }
         }
     }
@@ -84,21 +81,21 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 
         try
         {
-            _logger.LogInformation("Starting Gemini decision analysis");
+            Console.WriteLine("[GEMINI] Starting decision analysis...");
             await WaitForRateLimitAsync(cancellationToken);
-            _logger.LogDebug("Rate limit check passed");
+            Console.WriteLine("[GEMINI] Rate limit check passed...");
 
             var prompt = BuildAnalysisPrompt(context, schema);
-            _logger.LogDebug("Calling Gemini API for analysis");
+            Console.WriteLine("[GEMINI] Calling Gemini API for analysis...");
             var response = await CallGeminiApiAsync(prompt, cancellationToken);
-            _logger.LogDebug("Analysis response received: {ResponsePreview}...", response.Substring(0, Math.Min(100, response.Length)));
+            Console.WriteLine($"[GEMINI] Analysis response received: {response.Substring(0, Math.Min(100, response.Length))}...");
             var analysis = ParseAnalysisResponse(response);
 
             return analysis;
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Gemini analysis failed");
+            Console.WriteLine($"Analysis failed: {ex.Message}");
             return CreatePlaceholderAnalysis($"Error: {ex.Message}");
         }
     }
@@ -126,7 +123,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Gemini re-analysis failed");
+            Console.WriteLine($"Re-analysis failed: {ex.Message}");
             return CreatePlaceholderAnalysis($"Error: {ex.Message}");
         }
     }
@@ -341,7 +338,8 @@ ANSWER (decision-scoped only):";
         };
 
         var json = JsonSerializer.Serialize(requestBody);
-        
+        var content = new StringContent(json, Encoding.UTF8, "application/json");
+
         Exception? lastException = null;
 
         // Limit concurrency across instances
@@ -356,15 +354,15 @@ ANSWER (decision-scoped only):";
                 {
                     // No key available right now - wait a short randomized interval then retry
                     var waitMs = 250 + (new Random()).Next(0, 500);
-                    _logger.LogWarning("No available Gemini API key, waiting {WaitMs}ms before retry", waitMs);
-                    await Task.Delay(waitMs, cancellationToken);
+                    Console.WriteLine($"[GEMINI] No available API key, waiting {waitMs}ms before retry");
+                    await Task.Delay(waitMs);
                     continue;
                 }
 
                 var apiKey = _apiKeys[keyIndex];
                 var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={apiKey}";
 
-                _logger.LogDebug("Gemini API attempt {Attempt}/{TotalAttempts} with key #{KeyIndex}", attempt + 1, _apiKeys.Count, keyIndex + 1);
+                Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{keyIndex + 1}");
 
                 try
                 {
@@ -374,67 +372,30 @@ ANSWER (decision-scoped only):";
                         var baseDelay = 200 * Math.Pow(2, attempt - 1);
                         var jitter = new Random().Next(0, 200);
                         var delay = TimeSpan.FromMilliseconds(baseDelay + jitter);
-                        await Task.Delay(delay, cancellationToken);
-                        _logger.LogDebug("Waited {DelayMs}ms before retry", delay.TotalMilliseconds);
+                        await Task.Delay(delay);
+                        Console.WriteLine($"[GEMINI] Waited {delay.TotalMilliseconds}ms before retry");
                     }
 
                     // Create fresh content per attempt (do not reuse HttpContent across requests)
                     using var contentLocal = new StringContent(json, Encoding.UTF8, "application/json");
 
+                    // Record that we're attempting a request with this key (counts toward per-minute quota)
+                    RecordKeyRequest(keyIndex);
+
                     // Log masked key to verify which key is used (do not log full key)
                     var masked = apiKey != null && apiKey.Length > 6 ? $"****{apiKey.Substring(apiKey.Length - 6)}" : apiKey;
-                    _logger.LogDebug("Sending Gemini request with key {MaskedKey}, payload size={PayloadSize}", masked, contentLocal.Headers.ContentLength);
+                    Console.WriteLine($"[GEMINI] Sending request with key {masked}, payload size={contentLocal.Headers.ContentLength}");
 
-                    var response = await _httpClient.PostAsync(url, contentLocal, cancellationToken);
+                    var response = await _httpClient.PostAsync(url, contentLocal);
 
                     if (response.IsSuccessStatusCode)
                     {
                         var responseJson = await response.Content.ReadAsStringAsync();
-                        _logger.LogDebug("Gemini API response received, length={ResponseLength}", responseJson.Length);
-                        
-                        // Deserialize and validate response structure
+                        Console.WriteLine($"[GEMINI] Full API response: {responseJson}");
                         var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
-                        
-                        // Validate response structure
-                        if (geminiResponse == null)
-                        {
-                            _logger.LogWarning("Gemini API returned null response");
-                            throw new InvalidOperationException("Invalid response from Gemini API");
-                        }
-                        
-                        if (geminiResponse.Candidates == null || geminiResponse.Candidates.Length == 0)
-                        {
-                            _logger.LogWarning("Gemini API returned no candidates - content may be blocked");
-                            throw new InvalidOperationException("Content was blocked by safety filters or no response generated");
-                        }
-                        
-                        var candidate = geminiResponse.Candidates[0];
-                        
-                        // Check for blocked content
-                        if (candidate.FinishReason == "SAFETY")
-                        {
-                            _logger.LogWarning("Gemini API blocked content due to safety filters");
-                            throw new InvalidOperationException("Content was blocked by safety filters. Please rephrase your decision.");
-                        }
-                        
-                        // Validate content structure
-                        if (candidate.Content?.Parts == null || candidate.Content.Parts.Length == 0)
-                        {
-                            _logger.LogWarning("Gemini API returned empty content parts");
-                            throw new InvalidOperationException("Empty response from Gemini API");
-                        }
-                        
-                        var analysisText = candidate.Content.Parts[0]?.Text ?? "";
-                        
-                        if (string.IsNullOrWhiteSpace(analysisText))
-                        {
-                            _logger.LogWarning("Gemini API returned empty text");
-                            throw new InvalidOperationException("Empty analysis text from Gemini API");
-                        }
-                        
-                        _logger.LogDebug("Extracted analysis text, length={TextLength}", analysisText.Length);
-                        
-                        // Mark key as healthy and record this successful request
+                        var analysisText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
+                        Console.WriteLine($"[GEMINI] Extracted analysis text: {analysisText}");
+                        // Mark key as healthy and record this request
                         MarkKeyHealthy(keyIndex);
                         RecordKeyRequest(keyIndex);
                         return analysisText;
@@ -442,8 +403,8 @@ ANSWER (decision-scoped only):";
                     else
                     {
                         var error = await response.Content.ReadAsStringAsync();
-                        _logger.LogWarning("Gemini API error with key #{KeyIndex}: {StatusCode}", keyIndex + 1, response.StatusCode);
-                        _logger.LogDebug("Gemini error response: {ErrorPreview}", error.Substring(0, Math.Min(200, error.Length)));
+                        Console.WriteLine($"[GEMINI ERROR] Key #{keyIndex + 1}: {response.StatusCode}");
+                        Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
 
                         lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
 
@@ -452,14 +413,14 @@ ANSWER (decision-scoped only):";
                         {
                             // Put key into cooldown with exponential backoff
                             SetKeyCooldown(keyIndex);
-                            _logger.LogWarning("Gemini API key #{KeyIndex} placed into cooldown", keyIndex + 1);
+                            Console.WriteLine($"[GEMINI] Key #{keyIndex + 1} placed into cooldown");
                             continue; // Try next available key
                         }
                         else if (response.StatusCode == HttpStatusCode.Unauthorized)
                         {
                             // Unauthorized - mark key dead for a long period
                             SetKeyCooldown(keyIndex, TimeSpan.FromHours(1));
-                            _logger.LogError("Gemini API key #{KeyIndex} unauthorized - disabled temporarily", keyIndex + 1);
+                            Console.WriteLine($"[GEMINI] Key #{keyIndex + 1} unauthorized - disabled temporarily");
                             continue;
                         }
                         else
@@ -470,13 +431,13 @@ ANSWER (decision-scoped only):";
                 }
                 catch (Exception ex)
                 {
-                    _logger.LogError(ex, "Gemini API key #{KeyIndex} exception", keyIndex + 1);
+                    Console.WriteLine($"[GEMINI ERROR] Key #{keyIndex + 1} exception: {ex.Message}");
                     lastException = ex;
                     SetKeyCooldown(keyIndex);
                 }
             }
 
-            _logger.LogError("All {KeyCount} Gemini API keys exhausted or temporarily unavailable", _apiKeys.Count);
+            Console.WriteLine($"[GEMINI ERROR] All {_apiKeys.Count} API keys exhausted or temporarily unavailable");
             throw lastException ?? new Exception("All API keys failed");
         }
         finally
@@ -512,7 +473,7 @@ ANSWER (decision-scoped only):";
             if (jsonStart >= 0 && jsonEnd > jsonStart)
             {
                 var jsonStr = cleanResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                _logger.LogDebug("Attempting to parse Gemini JSON response: {JsonPreview}...", jsonStr.Substring(0, Math.Min(200, jsonStr.Length)));
+                Console.WriteLine($"[GEMINI] Attempting to parse JSON: {jsonStr.Substring(0, Math.Min(200, jsonStr.Length))}...");
 
                 var options = new JsonSerializerOptions
                 {
@@ -524,7 +485,7 @@ ANSWER (decision-scoped only):";
 
                 if (parsed != null)
                 {
-                    _logger.LogInformation("Successfully parsed Gemini response: Score={Score}, Pros={ProsCount}, Risks={RisksCount}", parsed.FeasibilityScore, parsed.Pros?.Count ?? 0, parsed.Risks?.Count ?? 0);
+                    Console.WriteLine($"[GEMINI] Successfully parsed: Score={parsed.FeasibilityScore}, Pros={parsed.Pros?.Count ?? 0}, Risks={parsed.Risks?.Count ?? 0}");
 
                     return new DecisionAnalysis(
                         Math.Max(0, Math.Min(100, parsed.FeasibilityScore)), // Clamp to 0-100
@@ -562,15 +523,15 @@ ANSWER (decision-scoped only):";
                 }
             }
 
-            _logger.LogWarning("No valid JSON structure found in Gemini response");
+            Console.WriteLine($"[GEMINI] No valid JSON structure found in response");
         }
         catch (JsonException ex)
         {
-            _logger.LogWarning(ex, "Gemini JSON parsing failed");
+            Console.WriteLine($"[GEMINI] JSON parsing failed: {ex.Message}");
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Gemini analysis parsing failed");
+            Console.WriteLine($"[GEMINI] Analysis parsing failed: {ex.Message}");
         }
 
         // Enhanced fallback with more helpful message
@@ -621,7 +582,7 @@ ANSWER (decision-scoped only):";
                     var waitTime = TimeSpan.FromMinutes(1) - (now - oldestRequest);
                     if (waitTime.TotalMilliseconds > 0)
                     {
-                        _logger.LogWarning("Gemini global rate limit reached. Waiting {WaitSeconds:F1}s", waitTime.TotalSeconds);
+                        Console.WriteLine($"[GEMINI] Global rate limit reached. Waiting {waitTime.TotalSeconds:F1}s...");
                         Task.Delay(waitTime).Wait(); // Lock-safe wait
                     }
                     _requestTimes.Dequeue();
@@ -640,12 +601,7 @@ ANSWER (decision-scoped only):";
     {
         lock (_globalKeyRotationLock)
         {
-            if (_apiKeys.Count == 0)
-            {
-                throw new InvalidOperationException(
-                    "No Gemini API keys configured. Please set GEMINI_API_KEY environment variable.");
-            }
-            return _apiKeys[_globalCurrentKeyIndex % _apiKeys.Count];
+            return _apiKeys[_globalCurrentKeyIndex];
         }
     }
 
@@ -825,9 +781,6 @@ ANSWER (decision-scoped only):";
     private class GeminiCandidate
     {
         public GeminiContent? Content { get; set; }
-        
-        [JsonPropertyName("finishReason")]
-        public string? FinishReason { get; set; }
     }
 
     private class GeminiContent
