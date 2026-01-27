@@ -14,13 +14,21 @@ export default function DecisionsDashboard() {
 
   useEffect(() => {
     let mounted = true
-    
+
     // Fetch real decisions from API
     async function fetchDecisions() {
       try {
-        const response = await apiClient.get('/decisions')
+        const response = await apiClient.get<any[]>('/api/v2/decisions')
         if (mounted) {
-          setDecisions(response.data || [])
+          // Map V2 data to dashboard fields
+          const mappedDecisions = (response.data || []).map((d: any) => ({
+            ...d,
+            title: d.naturalLanguageInput?.split('\n')[0]?.substring(0, 50) || 'Untitled Decision',
+            description: d.naturalLanguageInput || 'No description provided.',
+            confidence: d.inferredAttributes?.confidence || 85,
+            riskLevel: d.inferredAttributes?.riskLevel || 'Low'
+          }))
+          setDecisions(mappedDecisions)
         }
       } catch (error) {
         console.error('Failed to fetch decisions:', error)
@@ -34,9 +42,9 @@ export default function DecisionsDashboard() {
         }
       }
     }
-    
+
     fetchDecisions()
-    
+
     return () => {
       mounted = false
     }
@@ -44,11 +52,11 @@ export default function DecisionsDashboard() {
 
   const filteredDecisions = decisions.filter((d) => {
     if (selectedFilter === "all") return true
-    
+
     // Handle case insensitive filtering with null checks
     const outcome = d.outcome?.toLowerCase()?.trim()
     const filter = selectedFilter.toLowerCase().trim()
-    
+
     return outcome === filter
   })
 
@@ -57,17 +65,17 @@ export default function DecisionsDashboard() {
     approved: decisions.filter((d) => d.outcome === "Approved" || d.outcome === "approved").length,
     rejected: decisions.filter((d) => d.outcome === "Rejected" || d.outcome === "rejected").length,
     pending: decisions.filter((d) => d.outcome === "Pending" || d.outcome === "pending").length,
-    avgConfidence: decisions.length > 0 
+    avgConfidence: decisions.length > 0
       ? Math.round(decisions.reduce((sum, d) => {
-          const confidence = typeof d.confidence === 'number' ? d.confidence : 0
-          return sum + confidence
-        }, 0) / decisions.length)
+        const confidence = typeof d.confidence === 'number' ? d.confidence : 0
+        return sum + confidence
+      }, 0) / decisions.length)
       : 0,
   }
 
   const getOutcomeIcon = (outcome: string) => {
     const normalizedOutcome = outcome?.toLowerCase()?.trim()
-    
+
     switch (normalizedOutcome) {
       case "approved":
         return <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -191,7 +199,7 @@ export default function DecisionsDashboard() {
             {/* Decisions Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredDecisions.map((decision, index) => (
-                <Link key={decision.id} href={`/decisions-analytics/${decision.id}`}>
+                <Link key={decision.id} href={`/decisions/${decision.id}/analytics`}>
                   <Card
                     className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur hover:shadow-lg hover:shadow-green-500/10 smooth-transition cursor-pointer h-full animate-fade-in group"
                     style={{ animationDelay: `${index * 50}ms` }}
