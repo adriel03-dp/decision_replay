@@ -40,16 +40,21 @@ public class GlobalExceptionHandler : IExceptionHandler
         // Determine status code and user-facing message
         var (statusCode, errorCode, message) = MapExceptionToResponse(exception);
 
-        // Create error response
-        var errorResponse = new
+        // Create error response using standardized format
+        var errorResponse = new DecisionReplay.API.DTOs.ErrorResponse(
+            errorCode,
+            message,
+            httpContext.Request.Path.Value
+        );
+
+        // Only include stack trace in development
+        if (!IsProductionEnvironment())
         {
-            error = errorCode,
-            message = message,
-            timestamp = DateTime.UtcNow,
-            path = httpContext.Request.Path.Value,
-            // Only include stack trace in development
-            details = IsProductionEnvironment() ? null : exception.ToString()
-        };
+            errorResponse.Details = new Dictionary<string, object>
+            {
+                ["stackTrace"] = exception.ToString()
+            };
+        }
 
         // Write response
         httpContext.Response.StatusCode = statusCode;
