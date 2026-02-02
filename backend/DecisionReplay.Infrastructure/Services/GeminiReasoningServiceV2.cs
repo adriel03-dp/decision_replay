@@ -1,6 +1,9 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.ValueObjects;
 using DecisionReplay.Domain.Entities;
+using DecisionReplay.Infrastructure.Configuration;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Options;
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -33,25 +36,46 @@ namespace DecisionReplay.Infrastructure.Services;
 public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 {
     private readonly HttpClient _httpClient;
+    private readonly ILogger<GeminiReasoningServiceV2> _logger;
+    private readonly GeminiApiConfiguration _config;
+    private readonly GeminiResponseValidator _validator;
     private static readonly List<string> _apiKeys = new();
     private static int _globalCurrentKeyIndex = 0;
     private static readonly object _globalKeyRotationLock = new();
-    private static readonly SemaphoreSlim _instanceRateLimiter = new(8, 8);
-    private static readonly SemaphoreSlim _globalConcurrencyLimiter = new(4, 4);
+    private static SemaphoreSlim _instanceRateLimiter = new(8, 8);
+    private static SemaphoreSlim _globalConcurrencyLimiter = new(4, 4);
     private static readonly List<KeyState> _apiKeyStates = new();
     private static readonly Queue<DateTime> _requestTimes = new();
-    private const int MaxRequestsPerMinute = 15;
+    private static int _maxRequestsPerMinute = 15;
     private static bool _initialized = false;
 
-    public GeminiReasoningServiceV2(IHttpClientFactory httpClientFactory)
+    public GeminiReasoningServiceV2(
+        IHttpClientFactory httpClientFactory, 
+        ILogger<GeminiReasoningServiceV2> logger,
+        IOptions<GeminiApiConfiguration> config,
+        GeminiResponseValidator validator)
     {
         _httpClient = httpClientFactory.CreateClient();
-        _httpClient.Timeout = TimeSpan.FromSeconds(45); // Increased for detailed analysis
+        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _config = config?.Value ?? throw new ArgumentNullException(nameof(config));
+        _validator = validator ?? throw new ArgumentNullException(nameof(validator));
+        
+        // Apply configuration to HttpClient and semaphores
+        _httpClient.Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds);
 
         lock (_globalKeyRotationLock)
         {
             if (!_initialized)
             {
+                // Initialize semaphores with configured values
+                _instanceRateLimiter = new SemaphoreSlim(
+                    _config.RateLimiting.MaxInstanceConcurrentRequests, 
+                    _config.RateLimiting.MaxInstanceConcurrentRequests);
+                _globalConcurrencyLimiter = new SemaphoreSlim(
+                    _config.RateLimiting.MaxConcurrentRequests, 
+                    _config.RateLimiting.MaxConcurrentRequests);
+                _maxRequestsPerMinute = _config.RateLimiting.MaxRequestsPerMinute;
+
                 var key1 = Environment.GetEnvironmentVariable("GEMINI_API_KEY");
                 var key2 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_2");
                 var key3 = Environment.GetEnvironmentVariable("GEMINI_API_KEY_3");
@@ -67,7 +91,8 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
                 }
 
                 _initialized = true;
-                Console.WriteLine($"[GEMINI INIT] Reasoning Service initialized with {_apiKeys.Count} API key(s) (Static)");
+                logger.LogInformation("[GEMINI INIT] Reasoning Service initialized with {KeyCount} API key(s), Model: {Model}, Max RPM: {Rpm}", 
+                    _apiKeys.Count, _config.Model, _config.RateLimiting.MaxRequestsPerMinute);
             }
         }
     }
@@ -81,21 +106,33 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
 
         try
         {
-            Console.WriteLine("[GEMINI] Starting decision analysis...");
+            _logger.LogInformation("[GEMINI] Starting decision analysis...");
             await WaitForRateLimitAsync(cancellationToken);
-            Console.WriteLine("[GEMINI] Rate limit check passed...");
+            _logger.LogDebug("[GEMINI] Rate limit check passed...");
 
             var prompt = BuildAnalysisPrompt(context, schema);
-            Console.WriteLine("[GEMINI] Calling Gemini API for analysis...");
+            _logger.LogDebug("[GEMINI] Calling Gemini API for analysis...");
             var response = await CallGeminiApiAsync(prompt, cancellationToken);
-            Console.WriteLine($"[GEMINI] Analysis response received: {response.Substring(0, Math.Min(100, response.Length))}...");
+            _logger.LogDebug("[GEMINI] Analysis response received: {ResponsePreview}...", response.Substring(0, Math.Min(100, response.Length)));
             var analysis = ParseAnalysisResponse(response);
+
+            // Validate the AI response for quality and consistency
+            var validationResult = _validator.ValidateAnalysis(analysis, context.NaturalLanguageInput);
+            if (!validationResult.IsValid)
+            {
+                _logger.LogWarning("[GEMINI] Analysis validation failed: {Errors}", string.Join("; ", validationResult.Errors));
+            }
+            if (validationResult.Warnings.Count > 0)
+            {
+                _logger.LogInformation("[GEMINI] Analysis validation warnings: {Warnings}", string.Join("; ", validationResult.Warnings));
+            }
+            _logger.LogInformation("[GEMINI] Analysis quality score: {QualityScore}/100", validationResult.Score);
 
             return analysis;
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Analysis failed: {ex.Message}");
+            _logger.LogError(ex, "Analysis failed: {ErrorMessage}", ex.Message);
             return CreatePlaceholderAnalysis($"Error: {ex.Message}");
         }
     }
@@ -123,7 +160,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"Re-analysis failed: {ex.Message}");
+            _logger.LogError(ex, "Re-analysis failed: {ErrorMessage}", ex.Message);
             return CreatePlaceholderAnalysis($"Error: {ex.Message}");
         }
     }
@@ -323,10 +360,10 @@ ANSWER (decision-scoped only):";
             contents = new[] { new { parts = new[] { new { text = prompt } } } },
             generationConfig = new
             {
-                temperature = 0.2,  // Lower for more consistent, focused analysis
-                maxOutputTokens = 8192,  // Maximum for detailed analysis
-                topP = 0.8,
-                topK = 40
+                temperature = _config.Temperature,
+                maxOutputTokens = _config.MaxOutputTokens,
+                topP = _config.TopP,
+                topK = _config.TopK
             },
             safetySettings = new[]
             {
@@ -354,26 +391,27 @@ ANSWER (decision-scoped only):";
                 {
                     // No key available right now - wait a short randomized interval then retry
                     var waitMs = 250 + (new Random()).Next(0, 500);
-                    Console.WriteLine($"[GEMINI] No available API key, waiting {waitMs}ms before retry");
+                    _logger.LogWarning("[GEMINI] No available API key, waiting {WaitMs}ms before retry", waitMs);
                     await Task.Delay(waitMs);
                     continue;
                 }
 
                 var apiKey = _apiKeys[keyIndex];
-                var url = $"https://generativelanguage.googleapis.com/v1/models/gemini-1.5-flash:generateContent?key={apiKey}";
+                var url = $"https://generativelanguage.googleapis.com/v1/models/{_config.Model}:generateContent?key={apiKey}";
 
-                Console.WriteLine($"[GEMINI] Attempt {attempt + 1}/{_apiKeys.Count} with key #{keyIndex + 1}");
+                _logger.LogDebug("[GEMINI] Attempt {Attempt}/{TotalAttempts} with key #{KeyIndex}", attempt + 1, _apiKeys.Count, keyIndex + 1);
 
                 try
                 {
                     // Backoff with jitter between retries
                     if (attempt > 0)
                     {
-                        var baseDelay = 200 * Math.Pow(2, attempt - 1);
-                        var jitter = new Random().Next(0, 200);
-                        var delay = TimeSpan.FromMilliseconds(baseDelay + jitter);
-                        await Task.Delay(delay);
-                        Console.WriteLine($"[GEMINI] Waited {delay.TotalMilliseconds}ms before retry");
+                        var baseDelay = _config.RetryPolicy.BaseDelayMs * Math.Pow(2, attempt - 1);
+                        var cappedDelay = Math.Min(baseDelay, _config.RetryPolicy.MaxDelayMs);
+                        var jitter = new Random().Next(0, _config.RetryPolicy.BaseDelayMs);
+                        var delay = TimeSpan.FromMilliseconds(cappedDelay + jitter);
+                        await Task.Delay(delay, cancellationToken);
+                        _logger.LogDebug("[GEMINI] Waited {DelayMs}ms before retry", delay.TotalMilliseconds);
                     }
 
                     // Create fresh content per attempt (do not reuse HttpContent across requests)
@@ -384,17 +422,17 @@ ANSWER (decision-scoped only):";
 
                     // Log masked key to verify which key is used (do not log full key)
                     var masked = apiKey != null && apiKey.Length > 6 ? $"****{apiKey.Substring(apiKey.Length - 6)}" : apiKey;
-                    Console.WriteLine($"[GEMINI] Sending request with key {masked}, payload size={contentLocal.Headers.ContentLength}");
+                    _logger.LogDebug("[GEMINI] Sending request with key {MaskedKey}, payload size={PayloadSize}", masked, contentLocal.Headers.ContentLength);
 
                     var response = await _httpClient.PostAsync(url, contentLocal);
 
                     if (response.IsSuccessStatusCode)
                     {
                         var responseJson = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"[GEMINI] Full API response: {responseJson}");
+                        _logger.LogTrace("[GEMINI] Full API response: {ResponseJson}", responseJson);
                         var geminiResponse = JsonSerializer.Deserialize<GeminiResponse>(responseJson);
                         var analysisText = geminiResponse?.Candidates?[0]?.Content?.Parts?[0]?.Text ?? "";
-                        Console.WriteLine($"[GEMINI] Extracted analysis text: {analysisText}");
+                        _logger.LogDebug("[GEMINI] Extracted analysis text: {AnalysisText}", analysisText);
                         // Mark key as healthy and record this request
                         MarkKeyHealthy(keyIndex);
                         RecordKeyRequest(keyIndex);
@@ -403,8 +441,8 @@ ANSWER (decision-scoped only):";
                     else
                     {
                         var error = await response.Content.ReadAsStringAsync();
-                        Console.WriteLine($"[GEMINI ERROR] Key #{keyIndex + 1}: {response.StatusCode}");
-                        Console.WriteLine($"[GEMINI ERROR] Response: {error.Substring(0, Math.Min(200, error.Length))}");
+                        _logger.LogWarning("[GEMINI ERROR] Key #{KeyIndex}: {StatusCode}", keyIndex + 1, response.StatusCode);
+                        _logger.LogWarning("[GEMINI ERROR] Response: {ErrorPreview}", error.Substring(0, Math.Min(200, error.Length)));
 
                         lastException = new Exception(GetUserFriendlyErrorMessage(response.StatusCode, error));
 
@@ -413,14 +451,14 @@ ANSWER (decision-scoped only):";
                         {
                             // Put key into cooldown with exponential backoff
                             SetKeyCooldown(keyIndex);
-                            Console.WriteLine($"[GEMINI] Key #{keyIndex + 1} placed into cooldown");
+                            _logger.LogWarning("[GEMINI] Key #{KeyIndex} placed into cooldown", keyIndex + 1);
                             continue; // Try next available key
                         }
                         else if (response.StatusCode == HttpStatusCode.Unauthorized)
                         {
                             // Unauthorized - mark key dead for a long period
                             SetKeyCooldown(keyIndex, TimeSpan.FromHours(1));
-                            Console.WriteLine($"[GEMINI] Key #{keyIndex + 1} unauthorized - disabled temporarily");
+                            _logger.LogError("[GEMINI] Key #{KeyIndex} unauthorized - disabled temporarily", keyIndex + 1);
                             continue;
                         }
                         else
@@ -431,13 +469,13 @@ ANSWER (decision-scoped only):";
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine($"[GEMINI ERROR] Key #{keyIndex + 1} exception: {ex.Message}");
+                    _logger.LogError(ex, "[GEMINI ERROR] Key #{KeyIndex} exception: {ErrorMessage}", keyIndex + 1, ex.Message);
                     lastException = ex;
                     SetKeyCooldown(keyIndex);
                 }
             }
 
-            Console.WriteLine($"[GEMINI ERROR] All {_apiKeys.Count} API keys exhausted or temporarily unavailable");
+            _logger.LogError("[GEMINI ERROR] All {KeyCount} API keys exhausted or temporarily unavailable", _apiKeys.Count);
             throw lastException ?? new Exception("All API keys failed");
         }
         finally
@@ -473,7 +511,7 @@ ANSWER (decision-scoped only):";
             if (jsonStart >= 0 && jsonEnd > jsonStart)
             {
                 var jsonStr = cleanResponse.Substring(jsonStart, jsonEnd - jsonStart + 1);
-                Console.WriteLine($"[GEMINI] Attempting to parse JSON: {jsonStr.Substring(0, Math.Min(200, jsonStr.Length))}...");
+                _logger.LogDebug("[GEMINI] Attempting to parse JSON: {JsonPreview}...", jsonStr.Substring(0, Math.Min(200, jsonStr.Length)));
 
                 var options = new JsonSerializerOptions
                 {
@@ -485,7 +523,7 @@ ANSWER (decision-scoped only):";
 
                 if (parsed != null)
                 {
-                    Console.WriteLine($"[GEMINI] Successfully parsed: Score={parsed.FeasibilityScore}, Pros={parsed.Pros?.Count ?? 0}, Risks={parsed.Risks?.Count ?? 0}");
+                    _logger.LogInformation("[GEMINI] Successfully parsed: Score={Score}, Pros={ProsCount}, Risks={RisksCount}", parsed.FeasibilityScore, parsed.Pros?.Count ?? 0, parsed.Risks?.Count ?? 0);
 
                     return new DecisionAnalysis(
                         Math.Max(0, Math.Min(100, parsed.FeasibilityScore)), // Clamp to 0-100
@@ -501,7 +539,7 @@ ANSWER (decision-scoped only):";
                         parsed.Assumptions ?? new List<string>(),
                         parsed.Recommendations ?? new List<string>(),
                         Math.Max(0.0, Math.Min(1.0, parsed.ConfidenceLevel)), // Clamp to 0-1
-                        "gemini-1.5-flash"
+                        _config.Model
                     )
                     {
                         CurrentPlanAnalysis = parsed.CurrentPlanAnalysis != null ? new CurrentPlanAnalysis(
@@ -523,15 +561,15 @@ ANSWER (decision-scoped only):";
                 }
             }
 
-            Console.WriteLine($"[GEMINI] No valid JSON structure found in response");
+            _logger.LogWarning("[GEMINI] No valid JSON structure found in response");
         }
         catch (JsonException ex)
         {
-            Console.WriteLine($"[GEMINI] JSON parsing failed: {ex.Message}");
+            _logger.LogError(ex, "[GEMINI] JSON parsing failed: {ErrorMessage}", ex.Message);
         }
         catch (Exception ex)
         {
-            Console.WriteLine($"[GEMINI] Analysis parsing failed: {ex.Message}");
+            _logger.LogError(ex, "[GEMINI] Analysis parsing failed: {ErrorMessage}", ex.Message);
         }
 
         // Enhanced fallback with more helpful message
@@ -576,13 +614,13 @@ ANSWER (decision-scoped only):";
                     _requestTimes.Dequeue();
                 }
 
-                if (_requestTimes.Count >= MaxRequestsPerMinute * Math.Max(1, _apiKeys.Count))
+                if (_requestTimes.Count >= _maxRequestsPerMinute * Math.Max(1, _apiKeys.Count))
                 {
                     var oldestRequest = _requestTimes.Peek();
                     var waitTime = TimeSpan.FromMinutes(1) - (now - oldestRequest);
                     if (waitTime.TotalMilliseconds > 0)
                     {
-                        Console.WriteLine($"[GEMINI] Global rate limit reached. Waiting {waitTime.TotalSeconds:F1}s...");
+                        _logger.LogInformation("[GEMINI] Global rate limit reached. Waiting {WaitSeconds}s...", waitTime.TotalSeconds);
                         Task.Delay(waitTime).Wait(); // Lock-safe wait
                     }
                     _requestTimes.Dequeue();
@@ -627,7 +665,7 @@ ANSWER (decision-scoped only):";
                     _apiKeyStates[idx].RecentRequests.Dequeue();
                 }
 
-                if (_apiKeyStates[idx].AvailableAtUtc <= now && _apiKeyStates[idx].RecentRequests.Count < MaxRequestsPerMinute)
+                if (_apiKeyStates[idx].AvailableAtUtc <= now && _apiKeyStates[idx].RecentRequests.Count < _maxRequestsPerMinute)
                 {
                     _globalCurrentKeyIndex = idx; // start next search from this key
                     return Task.FromResult(idx);
