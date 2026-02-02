@@ -172,7 +172,9 @@ public class DecisionsV2Controller : ControllerBase
         var existing = await _repository.GetByIdAsync(id);
         if (existing == null)
         {
-            return NotFound(new { error = $"Decision {id} not found" });
+            return NotFound(ErrorResponse.NotFound(
+                $"Decision {id} not found",
+                HttpContext.Request.Path));
         }
 
         await _repository.DeleteAsync(id);
@@ -664,7 +666,7 @@ public class DecisionsV2Controller : ControllerBase
         try
         {
             var response = await _service.QueryDecisionAsync(decision, request.Question, HttpContext.RequestAborted);
-            return Ok(new { question = request.Question, answer = response });
+            return Ok(new QueryDecisionResponse(request.Question, response));
         }
         catch (Exception ex)
         {

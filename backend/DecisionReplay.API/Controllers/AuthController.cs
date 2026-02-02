@@ -106,7 +106,7 @@ public class AuthController : ControllerBase
                 HttpContext.Request.Path));
         }
 
-        return Ok(new { name = user.Name, email = user.Email });
+        return Ok(new UpdateProfileResponse { Name = user.Name, Email = user.Email });
     }
 
     [Authorize]
@@ -139,7 +139,7 @@ public class AuthController : ControllerBase
                 HttpContext.Request.Path));
         }
 
-        return Ok(new { message = "Password updated successfully" });
+        return Ok(SuccessResponse.Create("Password updated successfully"));
     }
 
     [Authorize]
@@ -168,6 +168,6 @@ public class AuthController : ControllerBase
                 HttpContext.Request.Path));
         }
 
-        return Ok(new { message = "Account deleted successfully" });
+        return Ok(SuccessResponse.Create("Account deleted successfully"));
     }
 }
