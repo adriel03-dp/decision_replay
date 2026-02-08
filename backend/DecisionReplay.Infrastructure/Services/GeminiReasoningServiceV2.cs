@@ -50,7 +50,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
     private static bool _initialized = false;
 
     public GeminiReasoningServiceV2(
-        IHttpClientFactory httpClientFactory, 
+        IHttpClientFactory httpClientFactory,
         ILogger<GeminiReasoningServiceV2> logger,
         IOptions<GeminiApiConfiguration> config,
         GeminiResponseValidator validator)
@@ -59,7 +59,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _config = config?.Value ?? throw new ArgumentNullException(nameof(config));
         _validator = validator ?? throw new ArgumentNullException(nameof(validator));
-        
+
         // Apply configuration to HttpClient and semaphores
         _httpClient.Timeout = TimeSpan.FromSeconds(_config.TimeoutSeconds);
 
@@ -69,10 +69,10 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
             {
                 // Initialize semaphores with configured values
                 _instanceRateLimiter = new SemaphoreSlim(
-                    _config.RateLimiting.MaxInstanceConcurrentRequests, 
+                    _config.RateLimiting.MaxInstanceConcurrentRequests,
                     _config.RateLimiting.MaxInstanceConcurrentRequests);
                 _globalConcurrencyLimiter = new SemaphoreSlim(
-                    _config.RateLimiting.MaxConcurrentRequests, 
+                    _config.RateLimiting.MaxConcurrentRequests,
                     _config.RateLimiting.MaxConcurrentRequests);
                 _maxRequestsPerMinute = _config.RateLimiting.MaxRequestsPerMinute;
 
@@ -91,7 +91,7 @@ public class GeminiReasoningServiceV2 : IAIReasoningServiceV2
                 }
 
                 _initialized = true;
-                logger.LogInformation("[GEMINI INIT] Reasoning Service initialized with {KeyCount} API key(s), Model: {Model}, Max RPM: {Rpm}", 
+                logger.LogInformation("[GEMINI INIT] Reasoning Service initialized with {KeyCount} API key(s), Model: {Model}, Max RPM: {Rpm}",
                     _apiKeys.Count, _config.Model, _config.RateLimiting.MaxRequestsPerMinute);
             }
         }

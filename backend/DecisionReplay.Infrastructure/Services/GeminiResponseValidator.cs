@@ -20,7 +20,7 @@ public class GeminiResponseValidator
     /// <summary>
     /// Validates a DecisionAnalysis for logical consistency
     /// </summary>
-    public ValidationResult ValidateAnalysis(DecisionAnalysis analysis, string originalContext)
+    public GeminiValidationResult ValidateAnalysis(DecisionAnalysis analysis, string originalContext)
     {
         var errors = new List<string>();
         var warnings = new List<string>();
@@ -106,7 +106,7 @@ public class GeminiResponseValidator
         _logger.LogDebug("[VALIDATION] Analysis validation completed: {ErrorCount} errors, {WarningCount} warnings", 
             errors.Count, warnings.Count);
 
-        return new ValidationResult
+        return new GeminiValidationResult
         {
             IsValid = errors.Count == 0,
             Errors = errors,
@@ -196,7 +196,7 @@ public class GeminiResponseValidator
     }
 }
 
-public class ValidationResult
+public class GeminiValidationResult
 {
     public bool IsValid { get; set; }
     public List<string> Errors { get; set; } = new();
