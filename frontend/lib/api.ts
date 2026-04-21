@@ -1,5 +1,10 @@
 import { apiClient } from './api-client';
-import type { Decision, CreateDecisionRequest, ReplayResponse, DecisionEvent, DecisionExtended } from './api-types';
+import type {
+  Decision, CreateDecisionRequest, ReplayResponse, DecisionEvent, DecisionExtended,
+  ProjectEvaluationRequest, ProjectEvaluationResponse,
+  SimulationRequest, SimulationResponse,
+  SavedDecisionResponse, DecisionSummaryResponse,
+} from './api-types';
 
 export const decisionApi = {
   // ============= Decision CRUD =============
@@ -46,6 +51,42 @@ export const decisionApi = {
   // Delete a decision (V2)
   async deleteDecision(decisionId: string): Promise<void> {
     await apiClient.delete(`/v2/decisions/${decisionId}`);
+  },
+
+  // ============= Hybrid Pipeline =============
+
+  // Evaluate project (deterministic, no save)
+  async evaluateProject(request: ProjectEvaluationRequest): Promise<ProjectEvaluationResponse> {
+    const response = await apiClient.post<ProjectEvaluationResponse>('/v2/decisions/evaluate', request);
+    return response.data;
+  },
+
+  // Simulate scenario adjustments (no save)
+  async simulateProject(request: SimulationRequest): Promise<SimulationResponse> {
+    const response = await apiClient.post<SimulationResponse>('/v2/decisions/simulate', request);
+    return response.data;
+  },
+
+  // Evaluate + save
+  async createAndEvaluate(request: ProjectEvaluationRequest): Promise<SavedDecisionResponse> {
+    const response = await apiClient.post<SavedDecisionResponse>('/v2/decisions', request);
+    return response.data;
+  },
+
+  // List saved decisions (summary)
+  async listDecisions(): Promise<DecisionSummaryResponse[]> {
+    const response = await apiClient.get<DecisionSummaryResponse[]>('/v2/decisions');
+    return response.data;
+  },
+
+  // Get saved decision by id
+  async getSavedDecision(id: string): Promise<SavedDecisionResponse | null> {
+    try {
+      const response = await apiClient.get<SavedDecisionResponse>(`/v2/decisions/${id}`);
+      return response.data;
+    } catch {
+      return null;
+    }
   },
 
   // ============= Replay & Events =============

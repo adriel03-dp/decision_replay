@@ -136,3 +136,112 @@ export type EventType =
   | 'DECISION_FINALIZED'
   | 'AUDIT_LOGGED';
 
+// ============= Hybrid Decision Types (new pipeline) =============
+
+export interface ProjectEvaluationRequest {
+  projectType: string;
+  features: string[];
+  budgetUsd: number;
+  timelineMonths: number;
+  teamSize: number;
+  rawInput?: string;
+  requestAiEnhancement?: boolean;
+}
+
+export interface SimulationRequest {
+  baseProject: ProjectEvaluationRequest;
+  budgetUsd?: number;
+  timelineMonths?: number;
+  teamSize?: number;
+  addFeatures?: string[];
+  removeFeatures?: string[];
+}
+
+export interface ProjectInputDto {
+  projectType: string;
+  features: string[];
+  budgetUsd: number;
+  timelineMonths: number;
+  teamSize: number;
+  isStructured: boolean;
+  rawInput?: string;
+}
+
+export interface FeasibilityIssueDto {
+  dimension: string;
+  message: string;
+  severity: string;
+}
+
+export interface SuggestedAdjustmentDto {
+  parameter: string;
+  description: string;
+  quantitativeImpact?: string;
+}
+
+export interface FeasibilityResultDto {
+  score: number;
+  verdict: string;
+  budgetFitScore: number;
+  timelineFitScore: number;
+  teamCapacityScore: number;
+  complexityScore: number;
+  estimatedCostUsd: number;
+  estimatedMonths: number;
+  requiredTeamSize: number;
+  issues: FeasibilityIssueDto[];
+  suggestedAdjustments: SuggestedAdjustmentDto[];
+  explainability: string[];
+  generatedAt: string;
+}
+
+export interface TimelinePhaseDto {
+  name: string;
+  startMonth: number;
+  endMonth: number;
+  durationMonths: number;
+  tasks: string[];
+  deliverables: string[];
+  percentageOfTotal: number;
+}
+
+export interface ProjectPlanDto {
+  totalMonths: number;
+  phases: TimelinePhaseDto[];
+  milestones: string[];
+  generatedAt: string;
+}
+
+export interface ProjectEvaluationResponse {
+  input: ProjectInputDto;
+  feasibility: FeasibilityResultDto;
+  plan: ProjectPlanDto;
+  aiEnhancement: null;
+  aiAvailable: boolean;
+  generatedAt: string;
+}
+
+export interface SavedDecisionResponse {
+  id: string;
+  analysis: ProjectEvaluationResponse | null;
+  createdAt: string;
+}
+
+export interface DecisionSummaryResponse {
+  id: string;
+  projectType: string;
+  features: string[];
+  feasibilityScore: number | null;
+  verdict: string | null;
+  status: string;
+  createdAt: string;
+}
+
+export interface SimulationResponse {
+  adjustedInput: ProjectInputDto;
+  newFeasibility: FeasibilityResultDto;
+  scoreDelta: number;
+  verdictDelta: string;
+  impactSummary: string[];
+}
+

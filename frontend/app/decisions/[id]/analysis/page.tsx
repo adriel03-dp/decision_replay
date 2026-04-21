@@ -3,11 +3,273 @@
 import { useState, useEffect } from "react"
 import { useParams, useRouter } from "next/navigation"
 import Link from "next/link"
-import { ChevronLeft, Sparkles, Send, BarChart3, AlertCircle, CheckCircle2, TrendingUp } from "lucide-react"
+import { ChevronLeft, BarChart3, AlertTriangle, CheckCircle, Loader2, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
-import { AnimatedTimelineChart } from "@/components/decision-replay/animated-timeline-chart"
+import { decisionApi } from "@/lib/api"
+import type { SavedDecisionResponse, SimulationResponse, FeasibilityResultDto, ProjectPlanDto } from "@/lib/api-types"
+
+function ScoreBar({ label, value }: { label: string; value: number }) {
+  const pct = Math.round(value)
+  const color = pct >= 75 ? "bg-green-500" : pct >= 55 ? "bg-yellow-500" : "bg-red-500"
+  return (
+    <div className="space-y-1">
+      <div className="flex justify-between text-sm">
+        <span className="text-muted-foreground">{label}</span>
+        <span className="font-medium">{pct}/100</span>
+      </div>
+      <div className="h-2 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full rounded-full transition-all duration-500 ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
+  )
+}
+
+function VerdictBadge({ verdict }: { verdict: string }) {
+  const cls =
+    verdict === "Feasible" ? "bg-green-100 text-green-800" :
+    verdict === "Risky"    ? "bg-yellow-100 text-yellow-800" : "bg-red-100 text-red-800"
+  return <span className={`px-3 py-1 rounded-full text-sm font-medium ${cls}`}>{verdict}</span>
+}
+
+export default function AnalysisPage() {
+  const params = useParams()
+  const router = useRouter()
+  const { toast } = useToast()
+  const id = params.id as string
+
+  const [decision, setDecision] = useState<SavedDecisionResponse | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  // Simulation panel
+  const [simBudget, setSimBudget] = useState("")
+  const [simTimeline, setSimTimeline] = useState("")
+  const [simTeam, setSimTeam] = useState("")
+  const [simulating, setSimulating] = useState(false)
+  const [simResult, setSimResult] = useState<SimulationResponse | null>(null)
+
+  useEffect(() => {
+    decisionApi.getSavedDecision(id).then(d => {
+      if (!d) { toast({ title: "Decision not found", variant: "destructive" }); router.push("/decisions"); return }
+      setDecision(d)
+      if (d.analysis) {
+        setSimBudget(String(d.analysis.input.budgetUsd))
+        setSimTimeline(String(d.analysis.input.timelineMonths))
+        setSimTeam(String(d.analysis.input.teamSize))
+      }
+    }).finally(() => setLoading(false))
+  }, [id])
+
+  const handleSimulate = async () => {
+    if (!decision?.analysis) return
+    setSimulating(true)
+    setSimResult(null)
+    try {
+      const res = await decisionApi.simulateProject({
+        baseProject: {
+          projectType: decision.analysis.input.projectType,
+          features: decision.analysis.input.features,
+          budgetUsd: decision.analysis.input.budgetUsd,
+          timelineMonths: decision.analysis.input.timelineMonths,
+          teamSize: decision.analysis.input.teamSize,
+          requestAiEnhancement: false,
+        },
+        budgetUsd: simBudget ? Number(simBudget) : undefined,
+        timelineMonths: simTimeline ? Number(simTimeline) : undefined,
+        teamSize: simTeam ? Number(simTeam) : undefined,
+      })
+      setSimResult(res)
+    } catch {
+      toast({ title: "Simulation failed", variant: "destructive" })
+    } finally { setSimulating(false) }
+  }
+
+  if (loading) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  )
+
+  const analysis = decision?.analysis
+  if (!analysis) return (
+    <div className="min-h-screen flex items-center justify-center">
+      <p className="text-muted-foreground">No analysis data available.</p>
+    </div>
+  )
+
+  const f = analysis.feasibility
+  const p = analysis.plan
+
+  return (
+    <div className="min-h-screen bg-background">
+      <div className="max-w-5xl mx-auto px-4 py-8 space-y-6">
+
+        {/* Header */}
+        <div className="flex items-center gap-3">
+          <Link href="/decisions">
+            <Button variant="ghost" size="sm"><ChevronLeft className="h-4 w-4 mr-1" />Decisions</Button>
+          </Link>
+          <div className="flex-1">
+            <h1 className="text-2xl font-bold">{analysis.input.projectType}</h1>
+            <p className="text-sm text-muted-foreground">{analysis.input.features.join(", ")}</p>
+          </div>
+          <VerdictBadge verdict={f.verdict} />
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Left col */}
+          <div className="lg:col-span-2 space-y-6">
+
+            {/* Score breakdown */}
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><BarChart3 className="h-4 w-4" />Feasibility Score</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <p className="text-5xl font-bold">{Math.round(f.score)}</p>
+                  <div>
+                    <p className="text-muted-foreground text-sm">out of 100</p>
+                    <VerdictBadge verdict={f.verdict} />
+                  </div>
+                </div>
+                <div className="space-y-3 pt-2">
+                  <ScoreBar label="Budget Fit" value={f.budgetFitScore} />
+                  <ScoreBar label="Timeline Fit" value={f.timelineFitScore} />
+                  <ScoreBar label="Team Capacity" value={f.teamCapacityScore} />
+                  <ScoreBar label="Simplicity" value={f.complexityScore} />
+                </div>
+                <div className="grid grid-cols-3 gap-4 pt-2 text-center border-t">
+                  <div><p className="text-xs text-muted-foreground">Est. Cost</p><p className="font-semibold">${f.estimatedCostUsd.toLocaleString()}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Est. Months</p><p className="font-semibold">{f.estimatedMonths.toFixed(1)}</p></div>
+                  <div><p className="text-xs text-muted-foreground">Req. Team</p><p className="font-semibold">{f.requiredTeamSize}</p></div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Timeline */}
+            <Card>
+              <CardHeader><CardTitle>Timeline — {p.totalMonths.toFixed(1)} months</CardTitle></CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {p.phases.map((ph, i) => (
+                    <div key={i} className="space-y-1">
+                      <div className="flex justify-between text-sm font-medium">
+                        <span>{ph.name}</span>
+                        <span className="text-muted-foreground">{ph.durationMonths.toFixed(1)} mo · {Math.round(ph.percentageOfTotal)}%</span>
+                      </div>
+                      <div className="h-2 bg-muted rounded-full overflow-hidden">
+                        <div className="h-full bg-primary/60 rounded-full" style={{ width: `${ph.percentageOfTotal}%` }} />
+                      </div>
+                      {ph.tasks.length > 0 && (
+                        <p className="text-xs text-muted-foreground">{ph.tasks.slice(0, 3).join(" · ")}{ph.tasks.length > 3 ? "…" : ""}</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Issues */}
+            {f.issues.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><AlertTriangle className="h-4 w-4 text-yellow-500" />Issues</CardTitle></CardHeader>
+                <CardContent className="space-y-2">
+                  {f.issues.map((issue, i) => (
+                    <div key={i} className="flex items-start gap-2 text-sm">
+                      <span className={`mt-0.5 px-1.5 py-0.5 rounded text-xs font-medium shrink-0 ${
+                        issue.severity === "High" ? "bg-red-100 text-red-700" :
+                        issue.severity === "Medium" ? "bg-yellow-100 text-yellow-700" : "bg-blue-100 text-blue-700"
+                      }`}>{issue.severity}</span>
+                      <span className="text-muted-foreground">{issue.message}</span>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Suggestions */}
+            {f.suggestedAdjustments.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle className="flex items-center gap-2"><CheckCircle className="h-4 w-4 text-green-500" />Suggestions</CardTitle></CardHeader>
+                <CardContent className="space-y-1">
+                  {f.suggestedAdjustments.map((s, i) => (
+                    <p key={i} className="text-sm text-muted-foreground">
+                      • <strong>{s.parameter}:</strong> {s.description}{s.quantitativeImpact ? ` (${s.quantitativeImpact})` : ""}
+                    </p>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Explainability */}
+            {f.explainability.length > 0 && (
+              <Card>
+                <CardHeader><CardTitle className="text-sm">How the score was calculated</CardTitle></CardHeader>
+                <CardContent className="space-y-1">
+                  {f.explainability.map((e, i) => <p key={i} className="text-sm text-muted-foreground">• {e}</p>)}
+                </CardContent>
+              </Card>
+            )}
+          </div>
+
+          {/* Right col: simulation */}
+          <div className="space-y-4">
+            <Card>
+              <CardHeader><CardTitle className="flex items-center gap-2"><RefreshCw className="h-4 w-4" />Scenario Simulation</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <p className="text-xs text-muted-foreground">Adjust parameters to see how your score changes.</p>
+                <div className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs">Budget (USD)</Label>
+                    <Input type="number" value={simBudget} onChange={e => setSimBudget(e.target.value)} placeholder={String(analysis.input.budgetUsd)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Timeline (months)</Label>
+                    <Input type="number" value={simTimeline} onChange={e => setSimTimeline(e.target.value)} placeholder={String(analysis.input.timelineMonths)} />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs">Team Size</Label>
+                    <Input type="number" value={simTeam} onChange={e => setSimTeam(e.target.value)} placeholder={String(analysis.input.teamSize)} />
+                  </div>
+                </div>
+                <Button className="w-full" onClick={handleSimulate} disabled={simulating}>
+                  {simulating ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <RefreshCw className="h-4 w-4 mr-2" />}
+                  Run Simulation
+                </Button>
+
+                {simResult && (
+                  <div className="mt-4 space-y-3 border-t pt-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm font-medium">New Score</span>
+                      <span className="text-2xl font-bold">{Math.round(simResult.newFeasibility.score)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-muted-foreground">Change</span>
+                      <span className={`font-medium ${simResult.scoreDelta >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {simResult.scoreDelta >= 0 ? "+" : ""}{simResult.scoreDelta.toFixed(1)}
+                      </span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">{simResult.verdictDelta}</p>
+                    {simResult.impactSummary.length > 0 && (
+                      <div className="space-y-1">
+                        {simResult.impactSummary.map((s, i) => <p key={i} className="text-xs text-muted-foreground">• {s}</p>)}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      </div>
+    </div>
+  )
+}
+
 import { AnimatedPerformanceChart } from "@/components/decision-replay/animated-performance-chart"
 import { AnimatedFactorHeatmap } from "@/components/decision-replay/animated-factor-heatmap"
 
