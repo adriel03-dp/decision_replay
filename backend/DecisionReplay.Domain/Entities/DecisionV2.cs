@@ -31,10 +31,20 @@ public class DecisionV2
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid Id { get; set; }
 
-    // Core decision data - domain-agnostic
+    // ── Legacy: natural-language pipeline (kept for backward compatibility) ──
     public DecisionContext Context { get; set; }
     public DecisionSchema? Schema { get; set; }
     public DecisionAnalysis? Analysis { get; set; }
+
+    // ── Hybrid pipeline: deterministic core + optional AI enhancement ──
+    [BsonElement("projectInput")]
+    public ProjectInput? ProjectInput { get; set; }
+
+    [BsonElement("feasibilityResult")]
+    public FeasibilityResult? FeasibilityResult { get; set; }
+
+    [BsonElement("projectPlan")]
+    public ProjectPlan? ProjectPlan { get; set; }
 
     // Lifecycle
     public DecisionStatus Status { get; set; }
@@ -43,7 +53,7 @@ public class DecisionV2
     public DateTime? LastModifiedAt { get; set; }
     public string CreatedBy { get; set; }
 
-    // Domain classification (detected automatically from input)
+    // Domain classification
     public string? DomainType { get; set; }
 
     // Public parameterless constructor for MongoDB
@@ -72,6 +82,38 @@ public class DecisionV2
     }
 
     /// <summary>
+    /// Hybrid constructor: creates a decision from structured project input.
+    /// </summary>
+    [SetsRequiredMembers]
+    public DecisionV2(ProjectInput projectInput, string createdBy)
+    {
+        if (projectInput == null)
+            throw new ArgumentNullException(nameof(projectInput));
+        if (string.IsNullOrWhiteSpace(createdBy))
+            throw new ArgumentException("Creator must be specified", nameof(createdBy));
+
+        Id = Guid.NewGuid();
+        ProjectInput = projectInput;
+        DomainType = projectInput.ProjectType;
+        CreatedBy = createdBy;
+        Status = DecisionStatus.Draft;
+        Outcome = DecisionOutcome.Draft;
+        CreatedAt = DateTime.UtcNow;
+
+        // Build a minimal context from structured input (for backward compatibility)
+        var description = $"{projectInput.ProjectType} project with {projectInput.Features.Count} feature(s). " +
+                          $"Budget: ${projectInput.BudgetUsd:N0}, Timeline: {projectInput.TimelineMonths} months, " +
+                          $"Team: {projectInput.TeamSize} developer(s).";
+        Context = new DecisionContext(description, new Dictionary<string, object>
+        {
+            ["projectType"]    = projectInput.ProjectType,
+            ["budgetUsd"]      = (double)projectInput.BudgetUsd,
+            ["timelineMonths"] = projectInput.TimelineMonths,
+            ["teamSize"]       = projectInput.TeamSize,
+        });
+    }
+
+    /// <summary>
     /// Associates a dynamically generated schema with this decision
     /// </summary>
     public void AssignSchema(DecisionSchema schema)
@@ -93,6 +135,30 @@ public class DecisionV2
         {
             >= 70 => DecisionOutcome.Feasible,
             >= 50 => DecisionOutcome.RiskyButPossible,
+            _ => DecisionOutcome.NeedsAdjustment
+        };
+
+        LastModifiedAt = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// Stores the output of the hybrid deterministic pipeline.
+    /// Also stores the optional AI enhancement in the legacy Analysis field.
+    /// </summary>
+    public void StoreHybridResult(
+        FeasibilityResult feasibility,
+        ProjectPlan plan,
+        DecisionAnalysis? aiEnhancement = null)
+    {
+        FeasibilityResult = feasibility ?? throw new ArgumentNullException(nameof(feasibility));
+        ProjectPlan = plan ?? throw new ArgumentNullException(nameof(plan));
+        Analysis = aiEnhancement; // null when AI is unavailable - that's fine
+        Status = DecisionStatus.Analyzed;
+
+        Outcome = feasibility.Score switch
+        {
+            >= 75 => DecisionOutcome.Feasible,
+            >= 55 => DecisionOutcome.RiskyButPossible,
             _ => DecisionOutcome.NeedsAdjustment
         };
 
