@@ -88,7 +88,7 @@ public class HealthController : ControllerBase
         try
         {
             var database = _mongoClient.GetDatabase(_mongoSettings.DatabaseName);
-            await database.ListCollectionNamesAsync().ToListAsync();
+            await (await database.ListCollectionNamesAsync()).ToListAsync();
             
             return new
             {

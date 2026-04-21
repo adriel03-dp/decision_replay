@@ -3,782 +3,248 @@ using Microsoft.AspNetCore.Authorization;
 using DecisionReplay.Application.Services;
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.API.DTOs;
-using DecisionReplay.API.Mapping;
 using DecisionReplay.Domain.Entities;
 using DecisionReplay.Domain.ValueObjects;
 using System.Security.Claims;
-using System.Threading;
-using System.Threading.Tasks;
 
 namespace DecisionReplay.API.Controllers;
 
 /// <summary>
-/// REFACTORED DecisionsV2 Controller - Domain-Agnostic Decision Management
-/// 
-/// SOLID Principles Applied:
-/// - Single Responsibility: Handles HTTP concerns only, delegates to service layer
-/// - Dependency Inversion: Depends on abstractions (services), not implementations
-/// - Open/Closed: Extensible via service layer without modifying controller
-/// 
-/// Clean Architecture:
-/// - API/Presentation layer
-/// - No business logic - only orchestration
-/// - Maps between DTOs and domain entities
-/// 
-/// Production Features:
-/// - Requires authentication (JWT)
-/// - Rate-limited via middleware
-/// - Domain-agnostic: accepts natural language input
-/// - RESTful API design
-/// - Decision replay capability
-/// - Chart-agnostic visualization endpoints
-/// 
-/// Improvements over V1:
-/// - No hard-coded fields
-/// - Natural language input
-/// - AI-powered parsing and analysis
-/// - Built-in replay capability
-/// - Visualization support
+/// Hybrid Decision Controller – primary API surface after re-architecture.
+///
+/// Endpoints
+/// ─────────
+/// POST   /api/v2/decisions/evaluate  – Hybrid analysis (no save)
+/// POST   /api/v2/decisions/simulate  – Scenario simulation (no save)
+/// POST   /api/v2/decisions           – Evaluate + save
+/// GET    /api/v2/decisions           – List user's decisions
+/// GET    /api/v2/decisions/{id}      – Get saved decision
+/// DELETE /api/v2/decisions/{id}      – Delete decision
 /// </summary>
 [ApiController]
 [Route("api/v2/decisions")]
 [Authorize]
 public class DecisionsV2Controller : ControllerBase
 {
-    private readonly DecisionServiceV2 _service;
+    private readonly HybridDecisionService _hybridService;
     private readonly IDecisionV2Repository _repository;
-    private readonly IInputValidationService _validationService;
     private readonly ILogger<DecisionsV2Controller> _logger;
 
     public DecisionsV2Controller(
-        DecisionServiceV2 service,
+        HybridDecisionService hybridService,
         IDecisionV2Repository repository,
-        IInputValidationService validationService,
         ILogger<DecisionsV2Controller> logger)
     {
-        _service = service ?? throw new ArgumentNullException(nameof(service));
+        _hybridService = hybridService ?? throw new ArgumentNullException(nameof(hybridService));
         _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-        _validationService = validationService ?? throw new ArgumentNullException(nameof(validationService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
     }
 
-    /// <summary>
-    /// Create a decision from natural language input
-    /// POST /api/v2/decisions
-    /// </summary>
-    [HttpPost]
-    [ProducesResponseType(typeof(DecisionV2Response), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    [ProducesResponseType(typeof(object), 429)]
-    [ProducesResponseType(typeof(object), 500)]
-    public async Task<ActionResult<DecisionV2Response>> Create([FromBody] NaturalLanguageDecisionRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Input))
-        {
-            _logger.LogWarning("Create decision failed: empty input from user {User}", User.Identity?.Name);
-            return BadRequest(ErrorResponse.ValidationError(
-                "Input cannot be empty. Provide a natural language description of your decision.",
-                path: HttpContext.Request.Path));
-        }
+    // ── Evaluate (no save) ─────────────────────────────────────────────
 
-        // Validate input content and detect domain
-        var validationResult = _validationService.ValidateInput(request.Input);
-        if (!validationResult.IsValid)
-        {
-            _logger.LogWarning("Input validation failed for user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
-            return BadRequest(ErrorResponse.ValidationError(
-                validationResult.ErrorMessage!,
-                path: HttpContext.Request.Path));
-        }
+    [HttpPost("evaluate")]
+    [ProducesResponseType(typeof(ProjectEvaluationResponse), 200)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(500)]
+    public async Task<ActionResult<ProjectEvaluationResponse>> Evaluate(
+        [FromBody] ProjectEvaluationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        if (!request.Features.Any(f => !string.IsNullOrWhiteSpace(f)))
+            return BadRequest(ErrorResponse.BadRequest(
+                "At least one non-empty feature must be specified.", HttpContext.Request.Path));
 
         try
         {
-            // Extract user ID from JWT claim (NameIdentifier contains user ID, Name contains display name)
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? request.CreatedBy;
-            _logger.LogInformation("Creating decision for user {User} in domain: {Domain}", userId, validationResult.DomainType);
+            var input = ToProjectInput(request);
+            var result = await _hybridService.EvaluateAsync(input, request.RequestAiEnhancement, cancellationToken);
 
-            // Use sanitized input for decision creation
-            var sanitizedInput = validationResult.SanitizedInput ?? request.Input;
+            _logger.LogInformation("[EVALUATE] User={User} Score={Score} AI={AI}",
+                UserId(), result.Feasibility.Score, result.AiAvailable);
 
-            // Create decision (parses intent, generates schema)
-            _logger.LogInformation("Step 1: Calling CreateDecisionAsync...");
-            var decision = await _service.CreateDecisionAsync(
-                sanitizedInput, 
-                userId, 
-                request.AnalyzeNow, 
-                HttpContext.RequestAborted
-            );
-
-            // Store detected domain type in the decision
-            decision.DomainType = validationResult.DomainType;
-
-            _logger.LogInformation("Step 2: Decision object created, saving to MongoDB...");
-
-            await _repository.CreateAsync(decision);
-            _logger.LogInformation("Step 3: Decision {DecisionId} saved to MongoDB", decision.Id);
-
-            _logger.LogInformation("Decision {DecisionId} created successfully for user {User}", decision.Id, userId);
-            return Ok(decision.ToResponse());
+            return Ok(ToEvaluationResponse(result));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Failed to create decision for user {User}. Error: {Error}", User.Identity?.Name, ex.ToString());
-
-            // Return user-friendly error message
-            var userMessage = GetUserFriendlyErrorMessage(ex);
+            _logger.LogError(ex, "[EVALUATE] Failed for user {User}", UserId());
             return StatusCode(500, ErrorResponse.InternalServerError(
-                userMessage,
-                HttpContext.Request.Path));
+                "Evaluation failed. Please try again.", HttpContext.Request.Path));
         }
     }
 
-    /// <summary>
-    /// Update a decision
-    /// PUT /api/v2/decisions/{id}
-    /// </summary>
-    [HttpPut("{id}")]
-    [ProducesResponseType(typeof(DecisionV2Response), 200)]
-    [ProducesResponseType(404)]
-    public async Task<ActionResult<DecisionV2Response>> Update(Guid id, [FromBody] UpdateDecisionV2Request request)
+    // ── Simulate ────────────────────────────────────────────────────────
+
+    [HttpPost("simulate")]
+    [ProducesResponseType(typeof(SimulationResponse), 200)]
+    [ProducesResponseType(400)]
+    public ActionResult<SimulationResponse> Simulate([FromBody] SimulationRequest request)
     {
-        var existing = await _repository.GetByIdAsync(id);
-        if (existing == null)
-        {
-            return NotFound(ErrorResponse.NotFound(
-                $"Decision {id} not found",
-                HttpContext.Request.Path));
-        }
+        if (!ModelState.IsValid) return BadRequest(ModelState);
 
-        // Update context if new input provided (triggers re-analysis requirement)
-        if (!string.IsNullOrEmpty(request.UpdatedInput))
+        var baseInput = ToProjectInput(request.BaseProject);
+        var adjustments = new SimulationAdjustments
         {
-            var newContext = new DecisionContext(request.UpdatedInput, existing.Context.InferredAttributes);
-            existing.UpdateContext(newContext);
-        }
+            BudgetUsd      = request.BudgetUsd,
+            TimelineMonths = request.TimelineMonths,
+            TeamSize       = request.TeamSize,
+            AddFeatures    = request.AddFeatures ?? new List<string>(),
+            RemoveFeatures = request.RemoveFeatures ?? new List<string>(),
+        };
 
-        await _repository.UpdateAsync(existing);
-        return Ok(existing.ToResponse());
+        var sim = _hybridService.Simulate(baseInput, adjustments);
+
+        return Ok(new SimulationResponse(
+            ToInputDto(sim.AdjustedInput),
+            ToFeasibilityDto(sim.NewFeasibility),
+            sim.ScoreDelta,
+            sim.VerdictDelta,
+            sim.ImpactSummary.ToList()));
     }
 
-    /// <summary>
-    /// Delete a decision
-    /// DELETE /api/v2/decisions/{id}
-    /// </summary>
+    // ── Create (evaluate + save) ────────────────────────────────────────
+
+    [HttpPost]
+    [ProducesResponseType(typeof(SavedDecisionResponse), 201)]
+    [ProducesResponseType(400)]
+    [ProducesResponseType(500)]
+    public async Task<ActionResult<SavedDecisionResponse>> Create(
+        [FromBody] ProjectEvaluationRequest request,
+        CancellationToken cancellationToken)
+    {
+        if (!ModelState.IsValid) return BadRequest(ModelState);
+
+        try
+        {
+            var input = ToProjectInput(request);
+            var result = await _hybridService.EvaluateAsync(input, request.RequestAiEnhancement, cancellationToken);
+
+            var decision = new DecisionV2(input, UserId());
+            decision.StoreHybridResult(result.Feasibility, result.Plan, result.AiEnhancement);
+            await _repository.CreateAsync(decision);
+
+            _logger.LogInformation("[CREATE] Decision {Id} saved for user {User}", decision.Id, UserId());
+
+            return CreatedAtAction(nameof(GetById), new { id = decision.Id },
+                new SavedDecisionResponse(decision.Id, ToEvaluationResponse(result), decision.CreatedAt));
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[CREATE] Failed for user {User}", UserId());
+            return StatusCode(500, ErrorResponse.InternalServerError(
+                "Failed to save decision.", HttpContext.Request.Path));
+        }
+    }
+
+    // ── List ────────────────────────────────────────────────────────────
+
+    [HttpGet]
+    [ProducesResponseType(typeof(List<DecisionSummaryResponse>), 200)]
+    public async Task<ActionResult<List<DecisionSummaryResponse>>> GetAll()
+    {
+        var decisions = await _repository.GetByUserAsync(UserId());
+        return Ok(decisions.Select(ToSummary).ToList());
+    }
+
+    // ── Get by ID ────────────────────────────────────────────────────────
+
+    [HttpGet("{id}")]
+    [ProducesResponseType(typeof(SavedDecisionResponse), 200)]
+    [ProducesResponseType(404)]
+    public async Task<ActionResult<SavedDecisionResponse>> GetById(Guid id)
+    {
+        var d = await _repository.GetByIdAsync(id);
+        if (d == null)
+            return NotFound(ErrorResponse.NotFound("Decision not found", HttpContext.Request.Path));
+
+        return Ok(ToSavedResponse(d));
+    }
+
+    // ── Delete ──────────────────────────────────────────────────────────
+
     [HttpDelete("{id}")]
     [ProducesResponseType(204)]
     [ProducesResponseType(404)]
     public async Task<ActionResult> Delete(Guid id)
     {
-        var existing = await _repository.GetByIdAsync(id);
-        if (existing == null)
-        {
-            return NotFound(ErrorResponse.NotFound(
-                $"Decision {id} not found",
-                HttpContext.Request.Path));
-        }
+        if (await _repository.GetByIdAsync(id) == null)
+            return NotFound(ErrorResponse.NotFound("Decision not found", HttpContext.Request.Path));
 
         await _repository.DeleteAsync(id);
         return NoContent();
     }
 
-    /// <summary>
-    /// Get decision by ID
-    /// GET /api/v2/decisions/{id}
-    /// </summary>
-    [HttpGet("{id}")]
-    [ProducesResponseType(typeof(DecisionV2Response), 200)]
-    [ProducesResponseType(typeof(object), 404)]
-    public async Task<ActionResult<DecisionV2Response>> GetById(Guid id)
+    // ── Mapping helpers ──────────────────────────────────────────────────
+
+    private string UserId() =>
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.Identity?.Name ?? "unknown";
+
+    private static ProjectInput ToProjectInput(ProjectEvaluationRequest r) =>
+        new(r.ProjectType,
+            r.Features.Where(f => !string.IsNullOrWhiteSpace(f)).ToList(),
+            r.BudgetUsd, r.TimelineMonths, r.TeamSize, r.RawInput, isStructured: true);
+
+    private static ProjectEvaluationResponse ToEvaluationResponse(HybridAnalysisResult r) =>
+        new(ToInputDto(r.Input),
+            ToFeasibilityDto(r.Feasibility),
+            ToPlanDto(r.Plan),
+            r.AiEnhancement != null ? ToAiDto(r.AiEnhancement) : null,
+            r.AiAvailable,
+            r.GeneratedAt);
+
+    private static ProjectInputDto ToInputDto(ProjectInput i) =>
+        new(i.ProjectType, i.Features.ToList(), i.BudgetUsd, i.TimelineMonths, i.TeamSize, i.IsStructured, i.RawInput);
+
+    private static FeasibilityResultDto ToFeasibilityDto(FeasibilityResult f) =>
+        new(f.Score, f.Verdict,
+            f.BudgetFitScore, f.TimelineFitScore, f.TeamCapacityScore, f.ComplexityScore,
+            f.EstimatedCostUsd, f.EstimatedMonths, f.RequiredTeamSize,
+            f.Issues.Select(i => new FeasibilityIssueDto(i.Dimension, i.Message, i.Severity)).ToList(),
+            f.SuggestedAdjustments.Select(s => new SuggestedAdjustmentDto(s.Parameter, s.Description, s.QuantitativeImpact)).ToList(),
+            f.Explainability.ToList(), f.GeneratedAt);
+
+    private static ProjectPlanDto ToPlanDto(ProjectPlan p) =>
+        new(p.TotalMonths,
+            p.Phases.Select(ph => new TimelinePhaseDto(
+                ph.Name, ph.StartMonth, ph.EndMonth, ph.DurationMonths,
+                ph.Tasks.ToList(), ph.Deliverables.ToList(), ph.PercentageOfTotal)).ToList(),
+            p.Milestones.ToList(), p.GeneratedAt);
+
+    private static AiEnhancementDto ToAiDto(DecisionAnalysis a) =>
+        new(a.ExecutiveSummary,
+            a.Recommendations.ToList(),
+            a.Risks.Select(r => r.Description + (r.Mitigation != null ? $" – {r.Mitigation}" : "")).ToList(),
+            a.Pros.ToList(), a.Cons.ToList(),
+            a.ConfidenceLevel, a.ModelUsed, a.GeneratedAt);
+
+    private static SavedDecisionResponse ToSavedResponse(DecisionV2 d)
     {
-        _logger.LogInformation("Fetching decision {DecisionId} for user {User}", id, User.Identity?.Name);
-
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
+        ProjectEvaluationResponse? eval = null;
+        if (d.FeasibilityResult != null)
         {
-            _logger.LogWarning("Decision {DecisionId} not found for user {User}", id, User.Identity?.Name);
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
+            var inputDto = d.ProjectInput != null
+                ? ToInputDto(d.ProjectInput)
+                : new ProjectInputDto(d.DomainType ?? "Unknown", new List<string>(), 0, 0, 1, false, null);
+
+            var planDto = d.ProjectPlan != null
+                ? ToPlanDto(d.ProjectPlan)
+                : new ProjectPlanDto(0, new List<TimelinePhaseDto>(), new List<string>(), d.CreatedAt);
+
+            var aiDto = d.Analysis != null ? ToAiDto(d.Analysis) : null;
+
+            eval = new ProjectEvaluationResponse(inputDto, ToFeasibilityDto(d.FeasibilityResult), planDto, aiDto, aiDto != null, d.CreatedAt);
         }
-
-        _logger.LogInformation("Decision {DecisionId} found, Context is {IsNull}", id, decision.Context == null ? "NULL" : "NOT NULL");
-
-        if (decision.Context == null)
-        {
-            _logger.LogError("Decision {DecisionId} has NULL Context! CreatedBy: {CreatedBy}, Status: {Status}",
-                id, decision.CreatedBy, decision.Status);
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                "Decision data is corrupted (null context)",
-                HttpContext.Request.Path));
-        }
-
-        return Ok(decision.ToResponse());
+        return new SavedDecisionResponse(d.Id, eval, d.CreatedAt);
     }
 
-    /// <summary>
-    /// Temporary analysis without saving decision
-    /// POST /api/v2/decisions/analyze-temp
-    /// </summary>
-    [HttpPost("analyze-temp")]
-    [ProducesResponseType(typeof(object), 200)]
-    [ProducesResponseType(typeof(object), 400)]
-    [ProducesResponseType(typeof(object), 500)]
-    public async Task<ActionResult<object>> AnalyzeTemporary([FromBody] NaturalLanguageDecisionRequest request)
-    {
-        if (string.IsNullOrWhiteSpace(request.Input))
-        {
-            _logger.LogWarning("Temporary analysis failed: empty input from user {User}", User.Identity?.Name);
-            return BadRequest(ErrorResponse.ValidationError(
-                "Input cannot be empty. Provide a natural language description of your decision.",
-                path: HttpContext.Request.Path));
-        }
-
-        // Validate input content and detect domain
-        var validationResult = _validationService.ValidateInput(request.Input);
-        if (!validationResult.IsValid)
-        {
-            _logger.LogWarning("Input validation failed for temporary analysis, user {User}: {Error}", User.Identity?.Name, validationResult.ErrorMessage);
-            return BadRequest(ErrorResponse.ValidationError(
-                validationResult.ErrorMessage!,
-                path: HttpContext.Request.Path));
-        }
-
-        try
-        {
-            // Extract user ID from JWT claim (NameIdentifier contains user ID, Name contains display name)
-            var userId = User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? request.CreatedBy;
-            _logger.LogInformation("Creating temporary analysis for user {User} in domain: {Domain}", userId, validationResult.DomainType);
-
-            // Use sanitized input for analysis
-            var sanitizedInput = validationResult.SanitizedInput ?? request.Input;
-
-            // Create decision without saving to database
-            var decision = await _service.CreateDecisionAsync(sanitizedInput, userId);
-
-            // Generate analysis without persisting
-            if (decision.Analysis != null)
-            {
-                _logger.LogInformation("Temporary analysis completed for user {User}", userId);
-
-                // Log what we're about to return for debugging
-                _logger.LogInformation("Analysis data: Score={Score}, Pros={ProsCount}, Cons={ConsCount}, Risks={RisksCount}, Recommendations={RecommendationsCount}",
-                    decision.Analysis.FeasibilityScore,
-                    decision.Analysis.Pros?.Count ?? 0,
-                    decision.Analysis.Cons?.Count ?? 0,
-                    decision.Analysis.Risks?.Count ?? 0,
-                    decision.Analysis.Recommendations?.Count ?? 0);
-
-                // Return the complete analysis data structure
-                return Ok(new
-                {
-                    // Basic metrics
-                    feasibilityScore = decision.Analysis.FeasibilityScore,
-                    feasibilityVerdict = decision.Analysis.FeasibilityVerdict,
-                    confidence = decision.Analysis.ConfidenceLevel,
-                    domainType = validationResult.DomainType,
-
-                    // Main content
-                    executiveSummary = decision.Analysis.ExecutiveSummary,
-                    reasoning = decision.Analysis.ExecutiveSummary, // Keep for backward compatibility
-
-                    // Analysis sections
-                    currentPlanAnalysis = decision.Analysis.CurrentPlanAnalysis != null ? new
-                    {
-                        timelineAssessment = decision.Analysis.CurrentPlanAnalysis.TimelineAssessment,
-                        scopeAssessment = decision.Analysis.CurrentPlanAnalysis.ScopeAssessment,
-                        budgetAssessment = decision.Analysis.CurrentPlanAnalysis.BudgetAssessment,
-                        resourceAssessment = decision.Analysis.CurrentPlanAnalysis.ResourceAssessment
-                    } : null,
-
-                    // Pros and Cons
-                    pros = decision.Analysis.Pros ?? new List<string>(),
-                    cons = decision.Analysis.Cons ?? new List<string>(),
-
-                    // Optimized solution
-                    optimizedSolution = decision.Analysis.OptimizedSolution != null ? new
-                    {
-                        improvedTimeline = decision.Analysis.OptimizedSolution.ImprovedTimeline,
-                        clarifiedScope = decision.Analysis.OptimizedSolution.ClarifiedScope,
-                        budgetOptimization = decision.Analysis.OptimizedSolution.BudgetOptimization,
-                        resourceStrategy = decision.Analysis.OptimizedSolution.ResourceStrategy,
-                        successProbability = decision.Analysis.OptimizedSolution.SuccessProbability
-                    } : null,
-
-                    optimizedPros = decision.Analysis.OptimizedPros ?? new List<string>(),
-                    optimizedCons = decision.Analysis.OptimizedCons ?? new List<string>(),
-
-                    // Risks with full detail
-                    risks = decision.Analysis.Risks?.Select(r => new
-                    {
-                        description = r.Description,
-                        impact = r.Impact,
-                        mitigation = r.Mitigation
-                    }) ?? Enumerable.Empty<object>(),
-
-                    // Additional data
-                    assumptions = decision.Analysis.Assumptions ?? new List<string>(),
-                    recommendations = decision.Analysis.Recommendations ?? new List<string>(),
-
-                    // Chart data for visualization
-                    chartData = GenerateChartDataForResponse(decision.Analysis),
-
-                    // Metadata
-                    timestamp = DateTime.UtcNow,
-                    modelUsed = decision.Analysis.ModelUsed ?? "gemini-1.5-flash",
-                    comparison = decision.Analysis.Comparison != null ? new
-                    {
-                        mainDifferences = decision.Analysis.Comparison.MainDifferences,
-                        tradeoffs = decision.Analysis.Comparison.Tradeoffs,
-                        whyOptimizedIsBetter = decision.Analysis.Comparison.WhyOptimizedIsBetter
-                    } : null
-                });
-            }
-            else
-            {
-                return Ok(new
-                {
-                    reasoning = "Analysis completed. Basic context assessment only.",
-                    domainType = validationResult.DomainType,
-                    generatedAt = DateTime.UtcNow,
-                    modelUsed = "gemini-1.5-flash",
-                    timestamp = DateTime.UtcNow
-                });
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "Failed to create temporary analysis for user {User}. Error: {Error}", User.Identity?.Name, ex.ToString());
-
-            var userMessage = GetUserFriendlyErrorMessage(ex);
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                userMessage,
-                HttpContext.Request.Path));
-        }
-    }
-
-    /// <summary>
-    /// Get decision schema
-    /// GET /api/v2/decisions/{id}/schema
-    /// </summary>
-    [HttpGet("{id}/schema")]
-    public async Task<ActionResult<SchemaResponse>> GetSchema(Guid id)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        if (decision.Schema == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Schema not generated yet",
-                HttpContext.Request.Path));
-
-        return Ok(decision.Schema.ToResponse());
-    }
-
-    /// <summary>
-    /// Analyze decision (generate AI reasoning)
-    /// POST /api/v2/decisions/{id}/analyze
-    /// </summary>
-    [HttpPost("{id}/analyze")]
-    public async Task<ActionResult<AnalysisResponse>> Analyze(Guid id)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        try
-        {
-            var analysis = await _service.AnalyzeDecisionAsync(decision, HttpContext.RequestAborted);
-            await _repository.UpdateAsync(decision);
-            return Ok(analysis.ToResponse());
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                ex.Message,
-                HttpContext.Request.Path));
-        }
-    }
-
-    /// <summary>
-    /// Get analysis for a decision
-    /// GET /api/v2/decisions/{id}/analysis
-    /// </summary>
-    [HttpGet("{id}/analysis")]
-    public async Task<ActionResult<AnalysisResponse>> GetAnalysis(Guid id)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        if (decision.Analysis == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Analysis not performed yet. Call POST /analyze first.",
-                HttpContext.Request.Path));
-
-        return Ok(decision.Analysis.ToResponse());
-    }
-
-    /// <summary>
-    /// Replay decision with updated input
-    /// POST /api/v2/decisions/{id}/replay
-    /// </summary>
-    [HttpPost("{id}/replay")]
-    public async Task<ActionResult<ReplayResponse>> Replay(Guid id, [FromBody] ReplayDecisionRequest request)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        if (string.IsNullOrWhiteSpace(request.UpdatedInput))
-            return BadRequest(ErrorResponse.ValidationError(
-                "Updated input cannot be empty",
-                path: HttpContext.Request.Path));
-
-        try
-        {
-            var replayResult = await _service.ReplayDecisionAsync(
-                decision,
-                request.UpdatedInput,
-                decision.CreatedBy,
-                HttpContext.RequestAborted
-            );
-
-            return Ok(replayResult.ToResponse());
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                ex.Message,
-                HttpContext.Request.Path));
-        }
-    }
-
-    /// <summary>
-    /// Get visualizations for a decision
-    /// GET /api/v2/decisions/{id}/visualizations
-    /// </summary>
-    [HttpGet("{id}/visualizations")]
-    public async Task<ActionResult<Dictionary<string, object>>> GetVisualizations(Guid id)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        try
-        {
-            var visualizations = await _service.GenerateVisualizationsAsync(decision);
-            return Ok(visualizations);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                ex.Message,
-                HttpContext.Request.Path));
-        }
-    }
-
-    /// <summary>
-    /// Get analytics for a decision (timeline, cost, risk level)
-    /// GET /api/v2/decisions/{id}/analytics
-    /// </summary>
-    [HttpGet("{id}/analytics")]
-    public async Task<ActionResult<object>> GetAnalytics(Guid id)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        if (decision.Analysis == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Analysis not performed yet. Call POST /analyze first.",
-                HttpContext.Request.Path));
-
-        // Generate analytics data from analysis
-        var analytics = new
-        {
-            feasibilityScore = (int)decision.Analysis.FeasibilityScore,
-            estimatedTimeline = ExtractTimeline(decision),
-            riskLevel = DetermineRiskLevel(decision.Analysis),
-            timeline = GenerateTimelinePhases(decision),
-            costBreakdown = GenerateCostBreakdown(decision),
-            totalCost = CalculateTotalCost(decision),
-            assumptions = decision.Analysis.Assumptions
-        };
-
-        return Ok(new
-        {
-            decision = decision.ToResponse(),
-            analytics
-        });
-    }
-
-    private string ExtractTimeline(DecisionV2 decision)
-    {
-        // Try to extract timeline from inferred attributes
-        if (decision.Context?.InferredAttributes != null)
-        {
-            if (decision.Context.InferredAttributes.TryGetValue("estimatedDuration", out var duration))
-                return duration?.ToString() ?? "Not specified";
-            if (decision.Context.InferredAttributes.TryGetValue("timeline", out var timeline))
-                return timeline?.ToString() ?? "Not specified";
-            if (decision.Context.InferredAttributes.TryGetValue("timeframe", out var timeframe))
-                return timeframe?.ToString() ?? "Not specified";
-        }
-        return "Not specified";
-    }
-
-    private string DetermineRiskLevel(DecisionAnalysis analysis)
-    {
-        if (analysis.Risks == null || !analysis.Risks.Any())
-            return "Low";
-
-        var highRiskCount = analysis.Risks.Count(r => r.Impact == "HIGH");
-        var mediumRiskCount = analysis.Risks.Count(r => r.Impact == "MEDIUM");
-
-        if (highRiskCount >= 3) return "Critical";
-        if (highRiskCount >= 1) return "High";
-        if (mediumRiskCount >= 3) return "Medium";
-        return "Low";
-    }
-
-    private List<object> GenerateTimelinePhases(DecisionV2 decision)
-    {
-        // Generate generic timeline phases based on inferred attributes
-        var phases = new List<object>();
-
-        // Check if we have specific phases in inferred attributes
-        if (decision.Context?.InferredAttributes != null && decision.Context.InferredAttributes.TryGetValue("phases", out var phasesObj))
-        {
-            // If phases are already defined, use them
-            if (phasesObj is List<object> existingPhases)
-                return existingPhases;
-        }
-
-        // Otherwise, generate generic phases
-        phases.Add(new
-        {
-            name = "Planning & Design",
-            duration = "20% of total time",
-            description = "Requirements gathering, architecture design, resource planning",
-            milestones = new[] { "Requirements finalized", "Design approved", "Team assembled" }
-        });
-
-        phases.Add(new
-        {
-            name = "Implementation",
-            duration = "50% of total time",
-            description = "Core development and execution phase",
-            milestones = new[] { "Milestone 1 complete", "Mid-point review", "Milestone 2 complete" }
-        });
-
-        phases.Add(new
-        {
-            name = "Testing & Validation",
-            duration = "20% of total time",
-            description = "Quality assurance, user acceptance testing, bug fixes",
-            milestones = new[] { "QA testing complete", "UAT passed", "Bug fixes deployed" }
-        });
-
-        phases.Add(new
-        {
-            name = "Deployment & Closure",
-            duration = "10% of total time",
-            description = "Final deployment, documentation, handoff",
-            milestones = new[] { "Production deployment", "Documentation complete", "Project closed" }
-        });
-
-        return phases;
-    }
-
-    private Dictionary<string, object> GenerateCostBreakdown(DecisionV2 decision)
-    {
-        var breakdown = new Dictionary<string, object>();
-
-        // Try to extract budget from inferred attributes
-        if (decision.Context?.InferredAttributes != null && decision.Context.InferredAttributes.TryGetValue("budget", out var budgetObj))
-        {
-            if (budgetObj is string budgetStr && decimal.TryParse(budgetStr.Replace("$", "").Replace(",", ""), out var budget))
-            {
-                // Generate realistic breakdown
-                breakdown["labor"] = Math.Round(budget * 0.6m, 2);
-                breakdown["materials"] = Math.Round(budget * 0.25m, 2);
-                breakdown["overhead"] = Math.Round(budget * 0.10m, 2);
-                breakdown["contingency"] = Math.Round(budget * 0.05m, 2);
-                return breakdown;
-            }
-        }
-
-        // Default breakdown if no budget specified
-        breakdown["labor"] = "TBD";
-        breakdown["materials"] = "TBD";
-        breakdown["overhead"] = "TBD";
-        breakdown["contingency"] = "TBD";
-        return breakdown;
-    }
-
-    private object CalculateTotalCost(DecisionV2 decision)
-    {
-        if (decision.Context?.InferredAttributes != null && decision.Context.InferredAttributes.TryGetValue("budget", out var budgetObj))
-        {
-            if (budgetObj is string budgetStr)
-            {
-                // Clean up the string and try to parse
-                var cleanBudget = budgetStr.Replace("$", "").Replace(",", "").Trim();
-                if (decimal.TryParse(cleanBudget, out var budget))
-                    return budget;
-                return budgetStr; // Return as-is if can't parse
-            }
-        }
-        return "Not specified";
-    }
-
-    /// <summary>
-    /// Ask a question about a decision
-    /// POST /api/v2/decisions/{id}/query
-    /// </summary>
-    [HttpPost("{id}/query")]
-    public async Task<ActionResult<object>> Query(Guid id, [FromBody] QueryRequest request)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        if (string.IsNullOrWhiteSpace(request.Question))
-            return BadRequest(ErrorResponse.ValidationError(
-                "Question cannot be empty",
-                path: HttpContext.Request.Path));
-
-        try
-        {
-            var response = await _service.QueryDecisionAsync(decision, request.Question, HttpContext.RequestAborted);
-            return Ok(new QueryDecisionResponse(request.Question, response));
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                ex.Message,
-                HttpContext.Request.Path));
-        }
-    }
-
-    /// <summary>
-    /// Commit a decision (finalize it)
-    /// POST /api/v2/decisions/{id}/commit
-    /// </summary>
-    [HttpPost("{id}/commit")]
-    public async Task<ActionResult<DecisionV2Response>> Commit(Guid id)
-    {
-        var decision = await _repository.GetByIdAsync(id);
-        if (decision == null)
-            return NotFound(ErrorResponse.NotFound(
-                "Decision not found",
-                HttpContext.Request.Path));
-
-        try
-        {
-            decision.CommitDecision();
-            await _repository.UpdateAsync(decision);
-            return Ok(decision.ToResponse());
-        }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(ErrorResponse.BadRequest(
-                ex.Message,
-                HttpContext.Request.Path));
-        }
-    }
-
-    /// <summary>
-    /// Get all decisions
-    /// GET /api/v2/decisions
-    /// </summary>
-    [HttpGet]
-    public async Task<ActionResult<List<DecisionV2Response>>> GetAll()
-    {
-        var decisions = await _repository.GetAllAsync();
-        return Ok(decisions.Select(d => d.ToResponse()).ToList());
-    }
-
-    /// <summary>
-    /// Generate chart data in response format for anonymous objects
-    /// </summary>
-    private object? GenerateChartDataForResponse(DecisionAnalysis analysis)
-    {
-        var chartData = analysis.GenerateChartData();
-        if (chartData == null) return null;
-
-        return new
-        {
-            timeline = chartData.Timeline.Select(t => new
-            {
-                time = t.Time,
-                feasibilityScore = t.FeasibilityScore,
-                timelinePressure = t.TimelinePressure,
-                resourceAdequacy = t.ResourceAdequacy,
-                scopeComplexity = t.ScopeComplexity
-            }).ToList(),
-            performance = chartData.Performance.Select(p => new
-            {
-                resource = p.Resource,
-                allocated = p.Allocated,
-                required = p.Required,
-                gap = p.Gap
-            }).ToList(),
-            riskHeatmap = chartData.RiskHeatmap.Select(r => new
-            {
-                factor = r.Factor,
-                impact = r.Impact,
-                status = r.Status,
-                trend = r.Trend,
-                description = r.Description
-            }).ToList()
-        };
-    }
-
-    /// <summary>
-    /// Convert technical exception messages to user-friendly error messages
-    /// </summary>
-    private string GetUserFriendlyErrorMessage(Exception ex)
-    {
-        var message = ex.Message.ToLower();
-
-        // Check for specific AI/API related errors
-        if (message.Contains("ai analysis is temporarily unavailable due to high demand"))
-            return "AI analysis is currently at capacity. Please try again in a few minutes.";
-
-        if (message.Contains("ai analysis service is not properly configured"))
-            return "AI features are currently unavailable. Your decision will be saved with basic analysis.";
-
-        if (message.Contains("ai analysis took too long"))
-            return "The analysis is taking longer than expected. Try using a shorter description.";
-
-        if (message.Contains("mongodb") || message.Contains("database"))
-            return "There was an issue saving your decision. Please try again.";
-
-        if (message.Contains("timeout") || message.Contains("took too long"))
-            return "The request is taking longer than expected. Please try again with a shorter description.";
-
-        if (message.Contains("authentication") || message.Contains("unauthorized"))
-            return "Your session has expired. Please log in again.";
-
-        // Default user-friendly message
-        return "We're experiencing technical difficulties. Your request could not be completed at this time. Please try again.";
-    }
+    private static DecisionSummaryResponse ToSummary(DecisionV2 d) =>
+        new(d.Id,
+            d.ProjectInput?.ProjectType ?? d.DomainType ?? "Unknown",
+            d.ProjectInput?.Features.ToList() ?? new List<string>(),
+            d.FeasibilityResult?.Score,
+            d.FeasibilityResult?.Verdict,
+            d.Status.ToString(),
+            d.CreatedAt);
 }
 
-public record QueryRequest(string Question);
