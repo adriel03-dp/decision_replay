@@ -75,14 +75,14 @@ public class GlobalExceptionHandler : IExceptionHandler
             UnauthorizedAccessException =>
                 ((int)HttpStatusCode.Forbidden, "Forbidden", "You do not have permission to access this resource."),
 
-            KeyNotFoundException or ArgumentException =>
+            KeyNotFoundException =>
+                ((int)HttpStatusCode.NotFound, "NotFound", exception.Message),
+
+            ArgumentException =>
                 ((int)HttpStatusCode.BadRequest, "BadRequest", exception.Message),
 
-            InvalidOperationException when exception.Message.Contains("GEMINI_API_KEY") =>
-                ((int)HttpStatusCode.ServiceUnavailable, "ServiceUnavailable", "AI reasoning service is temporarily unavailable."),
-
-            HttpRequestException when exception.Message.Contains("Gemini") =>
-                ((int)HttpStatusCode.BadGateway, "ExternalServiceError", "AI reasoning service is experiencing issues. Please try again later."),
+            HttpRequestException when exception.Message.Contains("Groq", StringComparison.OrdinalIgnoreCase) =>
+                ((int)HttpStatusCode.BadGateway, "ExternalServiceError", "The language interface is temporarily unavailable. Deterministic calculations remain available."),
 
             TaskCanceledException or OperationCanceledException =>
                 ((int)HttpStatusCode.RequestTimeout, "Timeout", "The request took too long to complete. Please try again."),
