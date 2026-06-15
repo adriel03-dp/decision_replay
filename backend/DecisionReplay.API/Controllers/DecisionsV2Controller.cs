@@ -1,250 +1,248 @@
-using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Authorization;
-using DecisionReplay.Application.Services;
-using DecisionReplay.Application.Interfaces;
-using DecisionReplay.API.DTOs;
-using DecisionReplay.Domain.Entities;
-using DecisionReplay.Domain.ValueObjects;
 using System.Security.Claims;
+using DecisionReplay.API.DTOs;
+using DecisionReplay.Application.Interfaces;
+using DecisionReplay.Application.Services;
+using DecisionReplay.Domain.Entities;
+using DecisionReplay.Domain.Enums;
+using DecisionReplay.Domain.ValueObjects;
+using DecisionReplay.Infrastructure.Services;
+using Microsoft.AspNetCore.Authorization;
+using Microsoft.AspNetCore.Mvc;
 
 namespace DecisionReplay.API.Controllers;
 
-/// <summary>
-/// Hybrid Decision Controller – primary API surface after re-architecture.
-///
-/// Endpoints
-/// ─────────
-/// POST   /api/v2/decisions/evaluate  – Hybrid analysis (no save)
-/// POST   /api/v2/decisions/simulate  – Scenario simulation (no save)
-/// POST   /api/v2/decisions           – Evaluate + save
-/// GET    /api/v2/decisions           – List user's decisions
-/// GET    /api/v2/decisions/{id}      – Get saved decision
-/// DELETE /api/v2/decisions/{id}      – Delete decision
-/// </summary>
 [ApiController]
-[Route("api/v2/decisions")]
 [Authorize]
-public class DecisionsV2Controller : ControllerBase
+[Route("api/v2/decisions")]
+public sealed class DecisionsV2Controller : ControllerBase
 {
-    private readonly HybridDecisionService _hybridService;
+    private readonly DecisionEngineService _engine;
     private readonly IDecisionV2Repository _repository;
-    private readonly ILogger<DecisionsV2Controller> _logger;
+    private readonly DomainTemplateService _templates;
+    private readonly ReplayComparisonService _replayComparison;
+    private readonly AuditTrailService _audit;
+    private readonly PlanExportService _exports;
 
     public DecisionsV2Controller(
-        HybridDecisionService hybridService,
+        DecisionEngineService engine,
         IDecisionV2Repository repository,
-        ILogger<DecisionsV2Controller> logger)
+        DomainTemplateService templates,
+        ReplayComparisonService replayComparison,
+        AuditTrailService audit,
+        PlanExportService exports)
     {
-        _hybridService = hybridService ?? throw new ArgumentNullException(nameof(hybridService));
-        _repository = repository ?? throw new ArgumentNullException(nameof(repository));
-        _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _engine = engine;
+        _repository = repository;
+        _templates = templates;
+        _replayComparison = replayComparison;
+        _audit = audit;
+        _exports = exports;
     }
-
-    // ── Evaluate (no save) ─────────────────────────────────────────────
-
-    [HttpPost("evaluate")]
-    [ProducesResponseType(typeof(ProjectEvaluationResponse), 200)]
-    [ProducesResponseType(400)]
-    [ProducesResponseType(500)]
-    public async Task<ActionResult<ProjectEvaluationResponse>> Evaluate(
-        [FromBody] ProjectEvaluationRequest request,
-        CancellationToken cancellationToken)
-    {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
-        if (!request.Features.Any(f => !string.IsNullOrWhiteSpace(f)))
-            return BadRequest(ErrorResponse.BadRequest(
-                "At least one non-empty feature must be specified.", HttpContext.Request.Path));
-
-        try
-        {
-            var input = ToProjectInput(request);
-            var result = await _hybridService.EvaluateAsync(input, request.RequestAiEnhancement, cancellationToken);
-
-            _logger.LogInformation("[EVALUATE] User={User} Score={Score} AI={AI}",
-                UserId(), result.Feasibility.Score, result.AiAvailable);
-
-            return Ok(ToEvaluationResponse(result));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[EVALUATE] Failed for user {User}", UserId());
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                "Evaluation failed. Please try again.", HttpContext.Request.Path));
-        }
-    }
-
-    // ── Simulate ────────────────────────────────────────────────────────
-
-    [HttpPost("simulate")]
-    [ProducesResponseType(typeof(SimulationResponse), 200)]
-    [ProducesResponseType(400)]
-    public ActionResult<SimulationResponse> Simulate([FromBody] SimulationRequest request)
-    {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
-        var baseInput = ToProjectInput(request.BaseProject);
-        var adjustments = new SimulationAdjustments
-        {
-            BudgetUsd      = request.BudgetUsd,
-            TimelineMonths = request.TimelineMonths,
-            TeamSize       = request.TeamSize,
-            AddFeatures    = request.AddFeatures ?? new List<string>(),
-            RemoveFeatures = request.RemoveFeatures ?? new List<string>(),
-        };
-
-        var sim = _hybridService.Simulate(baseInput, adjustments);
-
-        return Ok(new SimulationResponse(
-            ToInputDto(sim.AdjustedInput),
-            ToFeasibilityDto(sim.NewFeasibility),
-            sim.ScoreDelta,
-            sim.VerdictDelta,
-            sim.ImpactSummary.ToList()));
-    }
-
-    // ── Create (evaluate + save) ────────────────────────────────────────
 
     [HttpPost]
-    [ProducesResponseType(typeof(SavedDecisionResponse), 201)]
-    [ProducesResponseType(400)]
-    [ProducesResponseType(500)]
-    public async Task<ActionResult<SavedDecisionResponse>> Create(
-        [FromBody] ProjectEvaluationRequest request,
+    [HttpPost("analyze")]
+    [ProducesResponseType(typeof(DecisionEngineResponse), StatusCodes.Status201Created)]
+    public async Task<ActionResult<DecisionEngineResponse>> Analyze(
+        [FromBody] AnalyzeDecisionRequest request,
         CancellationToken cancellationToken)
     {
-        if (!ModelState.IsValid) return BadRequest(ModelState);
-
-        try
-        {
-            var input = ToProjectInput(request);
-            var result = await _hybridService.EvaluateAsync(input, request.RequestAiEnhancement, cancellationToken);
-
-            var decision = new DecisionV2(input, UserId());
-            decision.StoreHybridResult(result.Feasibility, result.Plan, result.AiEnhancement);
-            await _repository.CreateAsync(decision);
-
-            _logger.LogInformation("[CREATE] Decision {Id} saved for user {User}", decision.Id, UserId());
-
-            return CreatedAtAction(nameof(GetById), new { id = decision.Id },
-                new SavedDecisionResponse(decision.Id, ToEvaluationResponse(result), decision.CreatedAt));
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[CREATE] Failed for user {User}", UserId());
-            return StatusCode(500, ErrorResponse.InternalServerError(
-                "Failed to save decision.", HttpContext.Request.Path));
-        }
+        var decision = await _engine.AnalyzeAndCreateAsync(
+            request.Input,
+            UserId(),
+            cancellationToken);
+        return CreatedAtAction(
+            nameof(GetById),
+            new { id = decision.Id },
+            ToResponse(decision));
     }
-
-    // ── List ────────────────────────────────────────────────────────────
 
     [HttpGet]
-    [ProducesResponseType(typeof(List<DecisionSummaryResponse>), 200)]
-    public async Task<ActionResult<List<DecisionSummaryResponse>>> GetAll()
+    public async Task<ActionResult<IReadOnlyList<DecisionEngineSummaryResponse>>> GetAll()
     {
         var decisions = await _repository.GetByUserAsync(UserId());
-        return Ok(decisions.Select(ToSummary).ToList());
+        return Ok(decisions
+            .Select(ToSummary)
+            .Where(summary => summary != null)
+            .Cast<DecisionEngineSummaryResponse>()
+            .ToList());
     }
 
-    // ── Get by ID ────────────────────────────────────────────────────────
-
-    [HttpGet("{id}")]
-    [ProducesResponseType(typeof(SavedDecisionResponse), 200)]
-    [ProducesResponseType(404)]
-    public async Task<ActionResult<SavedDecisionResponse>> GetById(Guid id)
+    [HttpGet("{id:guid}")]
+    public async Task<ActionResult<DecisionEngineResponse>> GetById(Guid id)
     {
-        var d = await _repository.GetByIdAsync(id);
-        if (d == null)
-            return NotFound(ErrorResponse.NotFound("Decision not found", HttpContext.Request.Path));
-
-        return Ok(ToSavedResponse(d));
+        var decision = await _repository.GetByIdForUserAsync(id, UserId());
+        return decision == null
+            ? NotFound(ErrorResponse.NotFound("Decision not found.", Request.Path))
+            : Ok(ToResponse(decision));
     }
 
-    // ── Delete ──────────────────────────────────────────────────────────
-
-    [HttpDelete("{id}")]
-    [ProducesResponseType(204)]
-    [ProducesResponseType(404)]
-    public async Task<ActionResult> Delete(Guid id)
+    [HttpDelete("{id:guid}")]
+    public async Task<IActionResult> Delete(Guid id)
     {
-        if (await _repository.GetByIdAsync(id) == null)
-            return NotFound(ErrorResponse.NotFound("Decision not found", HttpContext.Request.Path));
-
-        await _repository.DeleteAsync(id);
-        return NoContent();
+        return await _repository.DeleteForUserAsync(id, UserId())
+            ? NoContent()
+            : NotFound(ErrorResponse.NotFound("Decision not found.", Request.Path));
     }
 
-    // ── Mapping helpers ──────────────────────────────────────────────────
+    [HttpPost("{id:guid}/replay")]
+    public async Task<ActionResult<ReplayDecisionResponse>> Replay(
+        Guid id,
+        [FromBody] ReplayDecisionEngineRequest request,
+        CancellationToken cancellationToken)
+    {
+        var result = await _engine.ReplayAsync(
+            id,
+            request.UpdatedInput,
+            UserId(),
+            cancellationToken);
+        return Ok(new ReplayDecisionResponse(
+            ToResponse(result.Decision),
+            result.Comparison));
+    }
+
+    [HttpGet("{id:guid}/versions")]
+    public async Task<ActionResult<IReadOnlyList<DecisionVersion>>> GetVersions(Guid id)
+    {
+        var decision = await _repository.GetByIdForUserAsync(id, UserId());
+        return decision == null
+            ? NotFound(ErrorResponse.NotFound("Decision not found.", Request.Path))
+            : Ok(decision.Versions.OrderBy(version => version.Version).ToList());
+    }
+
+    [HttpPost("{id:guid}/plans/generate")]
+    public async Task<ActionResult<ActionPlan>> GeneratePlan(
+        Guid id,
+        CancellationToken cancellationToken)
+    {
+        var plan = await _engine.RegeneratePlanAsync(id, UserId(), cancellationToken);
+        return Ok(plan);
+    }
+
+    [HttpGet("{id:guid}/plans/{planId:guid}")]
+    public async Task<ActionResult<ActionPlan>> GetPlan(Guid id, Guid planId)
+    {
+        return Ok(await _engine.GetPlanAsync(id, planId, UserId()));
+    }
+
+    [HttpPost("{id:guid}/plans/{planId:guid}/replay")]
+    public async Task<ActionResult<ReplayDecisionResponse>> ReplayPlan(
+        Guid id,
+        Guid planId,
+        [FromBody] ReplayDecisionEngineRequest request,
+        CancellationToken cancellationToken)
+    {
+        await _engine.GetPlanAsync(id, planId, UserId());
+        return await Replay(id, request, cancellationToken);
+    }
+
+    [HttpGet("{id:guid}/plans/{planId:guid}/export/pdf")]
+    public async Task<IActionResult> ExportPdf(Guid id, Guid planId)
+    {
+        var (decision, version, replay) = await GetExportContext(id, planId);
+        var file = _exports.ExportPdf(decision, version, replay);
+        await RecordExport(decision, version, "PDF");
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
+    [HttpGet("{id:guid}/plans/{planId:guid}/export/excel")]
+    public async Task<IActionResult> ExportExcel(Guid id, Guid planId)
+    {
+        var (decision, version, replay) = await GetExportContext(id, planId);
+        var file = _exports.ExportExcel(decision, version, replay);
+        await RecordExport(decision, version, "Excel");
+        return File(file.Content, file.ContentType, file.FileName);
+    }
+
+    [HttpGet("domains")]
+    [AllowAnonymous]
+    public ActionResult<object> GetDomains() =>
+        Ok(_templates.GetAll().Select(template => new
+        {
+            template.Domain,
+            template.DisplayName,
+            requiredFields = template.Fields.Where(field => field.Required),
+            optionalFields = template.Fields.Where(field => !field.Required),
+            template.ScoringFactors,
+            template.ReplaySensitiveFields
+        }));
+
+    private async Task<(DecisionV2 Decision, DecisionVersion Version, ReplayComparison? Replay)>
+        GetExportContext(Guid decisionId, Guid planId)
+    {
+        var decision = await _repository.GetByIdForUserAsync(decisionId, UserId())
+            ?? throw new KeyNotFoundException("Decision not found.");
+        var version = decision.Versions.FirstOrDefault(item => item.Plan?.PlanId == planId)
+            ?? throw new KeyNotFoundException("Plan not found.");
+        ReplayComparison? replay = null;
+        var previous = decision.Versions.FirstOrDefault(item => item.Version == version.Version - 1);
+        if (previous != null)
+            replay = _replayComparison.Compare(
+                previous,
+                version,
+                _templates.Get(version.StructuredData.Domain));
+        return (decision, version, replay);
+    }
+
+    private async Task RecordExport(
+        DecisionV2 decision,
+        DecisionVersion version,
+        string format)
+    {
+        decision.AuditTrail.Add(_audit.Create(
+            AuditActionType.PlanExported,
+            version.Version,
+            UserId(),
+            $"{format} plan export generated.",
+            new Dictionary<string, string>
+            {
+                ["format"] = format,
+                ["planId"] = version.Plan?.PlanId.ToString() ?? string.Empty
+            }));
+        await _repository.UpdateAsync(decision);
+    }
 
     private string UserId() =>
-        User.FindFirst(ClaimTypes.NameIdentifier)?.Value ?? User.Identity?.Name ?? "unknown";
+        User.FindFirst(ClaimTypes.NameIdentifier)?.Value
+        ?? throw new UnauthorizedAccessException("Authenticated user ID is missing.");
 
-    private static ProjectInput ToProjectInput(ProjectEvaluationRequest r) =>
-        new(r.ProjectType,
-            r.Features.Where(f => !string.IsNullOrWhiteSpace(f)).ToList(),
-            r.BudgetUsd, r.TimelineMonths, r.TeamSize, r.RawInput, isStructured: true);
-
-    private static ProjectEvaluationResponse ToEvaluationResponse(HybridAnalysisResult r) =>
-        new(ToInputDto(r.Input),
-            ToFeasibilityDto(r.Feasibility),
-            ToPlanDto(r.Plan),
-            r.AiEnhancement != null ? ToAiDto(r.AiEnhancement) : null,
-            r.AiAvailable,
-            r.GeneratedAt);
-
-    private static ProjectInputDto ToInputDto(ProjectInput i) =>
-        new(i.ProjectType, i.Features.ToList(), i.BudgetUsd, i.TimelineMonths, i.TeamSize, i.IsStructured, i.RawInput);
-
-    private static FeasibilityResultDto ToFeasibilityDto(FeasibilityResult f) =>
-        new(f.Score, f.Verdict,
-            f.BudgetFitScore, f.TimelineFitScore, f.TeamCapacityScore, f.ComplexityScore,
-            f.EstimatedCostUsd, f.EstimatedMonths, f.RequiredTeamSize,
-            f.Issues.Select(i => new FeasibilityIssueDto(i.Dimension, i.Message, i.Severity)).ToList(),
-            f.SuggestedAdjustments.Select(s => new SuggestedAdjustmentDto(s.Parameter, s.Description, s.QuantitativeImpact)).ToList(),
-            f.Explainability.ToList(), f.GeneratedAt);
-
-    private static ProjectPlanDto ToPlanDto(ProjectPlan p) =>
-        new(p.TotalMonths,
-            p.Phases.Select(ph => new TimelinePhaseDto(
-                ph.Name, ph.StartMonth, ph.EndMonth, ph.DurationMonths,
-                ph.Tasks.ToList(), ph.Deliverables.ToList(), ph.PercentageOfTotal)).ToList(),
-            p.Milestones.ToList(), p.GeneratedAt);
-
-    private static AiEnhancementDto ToAiDto(DecisionAnalysis a) =>
-        new(a.ExecutiveSummary,
-            a.Recommendations.ToList(),
-            a.Risks.Select(r => r.Description + (r.Mitigation != null ? $" – {r.Mitigation}" : "")).ToList(),
-            a.Pros.ToList(), a.Cons.ToList(),
-            a.ConfidenceLevel, a.ModelUsed, a.GeneratedAt);
-
-    private static SavedDecisionResponse ToSavedResponse(DecisionV2 d)
+    private static DecisionEngineResponse ToResponse(DecisionV2 decision)
     {
-        ProjectEvaluationResponse? eval = null;
-        if (d.FeasibilityResult != null)
-        {
-            var inputDto = d.ProjectInput != null
-                ? ToInputDto(d.ProjectInput)
-                : new ProjectInputDto(d.DomainType ?? "Unknown", new List<string>(), 0, 0, 1, false, null);
-
-            var planDto = d.ProjectPlan != null
-                ? ToPlanDto(d.ProjectPlan)
-                : new ProjectPlanDto(0, new List<TimelinePhaseDto>(), new List<string>(), d.CreatedAt);
-
-            var aiDto = d.Analysis != null ? ToAiDto(d.Analysis) : null;
-
-            eval = new ProjectEvaluationResponse(inputDto, ToFeasibilityDto(d.FeasibilityResult), planDto, aiDto, aiDto != null, d.CreatedAt);
-        }
-        return new SavedDecisionResponse(d.Id, eval, d.CreatedAt);
+        var version = decision.GetCurrentVersion()
+            ?? throw new InvalidOperationException("Decision has no current version.");
+        return new DecisionEngineResponse(
+            decision.Id,
+            version.Version,
+            version.StructuredData.Domain,
+            version.StructuredData.Title,
+            version.StructuredData.Goal,
+            version.NaturalLanguageInput,
+            version.StructuredData.Fields,
+            version.Feasibility.FeasibilityScore,
+            version.Feasibility.RiskLevel.ToString(),
+            version.Feasibility.FactorBreakdown,
+            version.Feasibility.Risks,
+            version.StructuredData.Assumptions,
+            version.Validation.MissingFields,
+            version.Feasibility.Recommendations,
+            version.Explanation,
+            version.Plan,
+            decision.AuditTrail.OrderBy(entry => entry.Timestamp).ToList(),
+            version.CreatedAt);
     }
 
-    private static DecisionSummaryResponse ToSummary(DecisionV2 d) =>
-        new(d.Id,
-            d.ProjectInput?.ProjectType ?? d.DomainType ?? "Unknown",
-            d.ProjectInput?.Features.ToList() ?? new List<string>(),
-            d.FeasibilityResult?.Score,
-            d.FeasibilityResult?.Verdict,
-            d.Status.ToString(),
-            d.CreatedAt);
+    private static DecisionEngineSummaryResponse? ToSummary(DecisionV2 decision)
+    {
+        var version = decision.GetCurrentVersion();
+        if (version == null) return null;
+        return new DecisionEngineSummaryResponse(
+            decision.Id,
+            version.Version,
+            version.StructuredData.Domain,
+            version.StructuredData.Title,
+            version.Feasibility.FeasibilityScore,
+            version.Feasibility.RiskLevel.ToString(),
+            version.Validation.MissingFields.Count,
+            version.Feasibility.Risks.Count,
+            decision.LastModifiedAt ?? decision.CreatedAt);
+    }
 }
-
