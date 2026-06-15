@@ -6,9 +6,8 @@ public sealed class MongoContext
 {
     public IMongoDatabase Database { get; }
 
-    public MongoContext(MongoSettings settings)
+    public MongoContext(IMongoClient client, MongoSettings settings)
     {
-        var client = new MongoClient(settings.ConnectionString);
         Database = client.GetDatabase(settings.DatabaseName);
     }
 
