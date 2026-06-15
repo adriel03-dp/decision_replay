@@ -1,10 +1,11 @@
 import axios from 'axios';
 
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/api$/, '');
+// auth-context uses NEXT_PUBLIC_API_URL with /api suffix; api-client strips it so paths like /api/v2/... resolve correctly
+const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000, // Increased to 60s to accommodate AI analysis latency
+  timeout: 60000,
   headers: {
     'Content-Type': 'application/json',
   },
@@ -29,7 +30,15 @@ apiClient.interceptors.request.use(
 apiClient.interceptors.response.use(
   (response) => response,
   (error) => {
-    // Silently handle errors - don't expose any details to console
+    if (typeof window !== 'undefined' && error.response?.status === 401) {
+      localStorage.removeItem('token');
+      localStorage.removeItem('user');
+
+      if (window.location.pathname !== '/login') {
+        window.location.replace('/login?reason=session-expired');
+      }
+    }
+
     return Promise.reject(error);
   }
 );
