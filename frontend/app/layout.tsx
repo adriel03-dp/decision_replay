@@ -1,18 +1,15 @@
 import type React from "react"
 import type { Metadata } from "next"
-import { Geist, Geist_Mono } from "next/font/google"
 import { Analytics } from "@vercel/analytics/next"
 import "./globals.css"
 import { Navbar } from "@/components/navbar"
 import { AuthProvider } from "@/lib/auth-context"
 import { ThemeProvider } from "@/components/theme-provider"
-
-const _geist = Geist({ subsets: ["latin"] })
-const _geistMono = Geist_Mono({ subsets: ["latin"] })
+import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: "Decision Replay - AI Decision Audit & Review System",
-  description: "Comprehensive decision replay, audit, and transparency system with complete AI reasoning history",
+  title: "Decision Replay - Constraint-Based Decision Engine",
+  description: "Auditable feasibility scoring, decision replay, risk analysis, and structured action plans",
   generator: "v0.app",
   icons: {
     icon: [
@@ -50,6 +47,7 @@ export default function RootLayout({
           <AuthProvider>
             <Navbar />
             <main className="pt-16">{children}</main>
+            <Toaster />
             <Analytics />
           </AuthProvider>
         </ThemeProvider>

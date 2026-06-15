@@ -1,0 +1,22 @@
+# Secrets and local environment
+.env
+.env.local
+.env.*.local
+
+# .NET build outputs
+**/bin/
+**/obj/
+
+# Frontend dependencies and outputs
+**/node_modules/
+**/.next/
+**/out/
+*.log
+
+# OS and editor artifacts
+.DS_Store
+Thumbs.db
+*.suo
+*.user
+.vs/
+*.swp

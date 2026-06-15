@@ -15,15 +15,15 @@ export default function HomePage() {
             <div className="space-y-4">
               <div className="inline-block">
                 <span className="text-sm font-semibold text-green-600 dark:text-green-400 bg-green-100/50 dark:bg-green-900/30 px-3 py-1 rounded-full">
-                  AI-Powered Decision Intelligence
+                  Auditable Decision Intelligence
                 </span>
               </div>
               <h1 className="text-5xl md:text-6xl font-bold leading-tight">
-                Make Better Decisions with <span className="gradient-text">AI Reasoning</span>
+                Make Better Decisions with <span className="gradient-text">Deterministic Evidence</span>
               </h1>
               <p className="text-lg text-foreground/70 max-w-xl">
                 Submit any decision in natural language—project plans, resource allocation, timelines, budgets—and get 
-                instant AI-powered feasibility analysis. See what could go wrong before you commit. Replay decisions 
+                instant constraint-based feasibility analysis. See what could go wrong before you commit. Replay decisions 
                 with updated constraints to explore "what-if" scenarios.
               </p>
             </div>
@@ -50,7 +50,7 @@ export default function HomePage() {
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium">Structured AI Analysis</span>
+                <span className="text-sm font-medium">Deterministic Scoring</span>
               </div>
               <div className="flex items-center gap-3">
                 <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -62,7 +62,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium">Any Domain Supported</span>
+                <span className="text-sm font-medium">Domain Rule Templates</span>
               </div>
             </div>
           </div>
@@ -89,7 +89,7 @@ export default function HomePage() {
         <div className="text-center mb-16 slide-up">
           <h2 className="text-4xl font-bold mb-4">How Decision Replay Works</h2>
           <p className="text-foreground/70 text-lg max-w-2xl mx-auto">
-            AI-powered decision intelligence that helps you understand feasibility, identify risks, and explore alternatives
+            Backend-owned decision intelligence that helps you understand feasibility, identify risks, and explore alternatives
           </p>
         </div>
 
@@ -103,9 +103,9 @@ export default function HomePage() {
             },
             {
               icon: TrendingUp,
-              title: "AI Feasibility Analysis",
+              title: "Constraint Feasibility Engine",
               description:
-                "Gemini AI analyzes feasibility, identifies risks, evaluates constraints, and provides structured pros/cons/recommendations.",
+                "Versioned backend rules calculate weighted feasibility, risk, missing evidence, and practical recommendations.",
             },
             {
               icon: Shield,

@@ -1,339 +1,181 @@
 "use client"
 
+import { useEffect, useMemo, useState } from "react"
 import Link from "next/link"
-import { useState, useEffect } from "react"
-import { Search, Filter, Plus, Trash2, Eye, BarChart3, AlertTriangle } from "lucide-react"
+import { AlertTriangle, ArrowUpRight, Plus, Search, Trash2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { OutcomeBadge } from "@/components/decision-replay/outcome-badge"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { decisionApi } from "@/lib/api"
-import { useDecisionStore } from "@/lib/store"
+import type { DecisionEngineSummary } from "@/lib/api-types"
 import { useToast } from "@/hooks/use-toast"
 import { useCustomConfirm } from "@/components/ui/custom-dialogs"
-import type { DecisionExtended, DecisionStatus } from "@/lib/api-types"
+
+function scoreTone(score: number) {
+  if (score >= 75) return "text-green-300"
+  if (score >= 55) return "text-amber-300"
+  return "text-red-300"
+}
+
+function riskTone(risk: string) {
+  if (risk === "Low") return "border-green-400/20 bg-green-400/10 text-green-300"
+  if (risk === "Medium") return "border-amber-400/20 bg-amber-400/10 text-amber-300"
+  return "border-red-400/20 bg-red-400/10 text-red-300"
+}
 
 export default function DecisionsPage() {
-  const { setSearchId, searchId } = useDecisionStore()
   const { toast } = useToast()
   const { showConfirm, ConfirmComponent } = useCustomConfirm()
-  const [decisions, setDecisions] = useState<DecisionExtended[]>([])
+  const [decisions, setDecisions] = useState<DecisionEngineSummary[]>([])
   const [loading, setLoading] = useState(true)
-  const [deleting, setDeleting] = useState<string | null>(null)
-  const [localStatusFilter, setLocalStatusFilter] = useState<string[]>([])
-  const [localDomainFilter, setLocalDomainFilter] = useState("")
+  const [query, setQuery] = useState("")
+  const [domain, setDomain] = useState("all")
 
-  // Fetch decisions from API
   useEffect(() => {
-    let mounted = true
-    
-    async function loadDecisions() {
-      if (!mounted) return
-      
-      setLoading(true)
-      try {
-        const data = await decisionApi.getAllDecisions()
-        if (mounted) {
-          setDecisions(data)
-        }
-      } catch (error) {
-        console.error('Failed to load decisions:', error)
-        if (mounted) {
-          toast({
-            title: "Decision Replay Alert",
-            description: "Failed to load decisions. Please refresh the page.",
-            variant: "destructive"
-          })
-        }
-      } finally {
-        if (mounted) {
-          setLoading(false)
-        }
-      }
-    }
-    
-    loadDecisions()
-    
-    return () => {
-      mounted = false
-    }
-  }, [])
+    decisionApi
+      .list()
+      .then(setDecisions)
+      .catch(() => toast({ title: "Unable to load decisions", variant: "destructive" }))
+      .finally(() => setLoading(false))
+  }, [toast])
 
-  const filteredDecisions = decisions.filter((decision) => {
-    const matchesSearch = 
-      decision.id.toLowerCase().includes(searchId.toLowerCase()) ||
-      decision.naturalLanguageInput?.toLowerCase().includes(searchId.toLowerCase())
-    const matchesStatus = localStatusFilter.length === 0 || localStatusFilter.includes(decision.status)
-    const matchesDomain = !localDomainFilter || decision.domainType === localDomainFilter
+  const domains = useMemo(
+    () => Array.from(new Set(decisions.map((item) => item.domain))).sort(),
+    [decisions],
+  )
 
-    return matchesSearch && matchesStatus && matchesDomain
+  const filtered = decisions.filter((item) => {
+    const search = query.trim().toLowerCase()
+    return (
+      (!search ||
+        item.title.toLowerCase().includes(search) ||
+        item.decisionId.toLowerCase().includes(search)) &&
+      (domain === "all" || item.domain === domain)
+    )
   })
 
-  const domainTypes = Array.from(new Set(decisions.map((d) => d.domainType).filter(Boolean)))
-  const statuses: DecisionStatus[] = ["Draft", "InReview", "Finalized"]
-
-  const toggleStatusFilter = (status: string) => {
-    const updated = localStatusFilter.includes(status)
-      ? localStatusFilter.filter((s) => s !== status)
-      : [...localStatusFilter, status]
-    setLocalStatusFilter(updated)
-  }
-
-  // Get a preview of the natural language input
-  const getPreview = (input: string, maxLength = 100) => {
-    if (!input) return "No description"
-    return input.length > maxLength ? input.substring(0, maxLength) + "..." : input
-  }
-
-  // Get feasibility score from analysis if available
-  const getFeasibilityScore = (decision: DecisionExtended): number | null => {
-    return decision.analysis?.feasibilityScore ?? null
-  }
-
-  // Delete decision function
-  const handleDeleteDecision = async (decisionId: string, event: React.MouseEvent) => {
-    event.preventDefault()
-    event.stopPropagation()
-    
+  function removeDecision(decisionId: string) {
     showConfirm(
-      'Are you sure you want to delete this decision? This action cannot be undone.',
+      "Delete this decision and every stored version? This cannot be undone.",
       async () => {
-        setDeleting(decisionId)
         try {
-          const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/v2/decisions/${decisionId}`, {
-            method: 'DELETE',
-            headers: {
-              'Authorization': `Bearer ${localStorage.getItem('token')}`
-            }
-          })
-
-          if (!response.ok) {
-            throw new Error('Failed to delete decision')
-          }
-
-          // Remove from local state
-          setDecisions(prev => prev.filter(d => d.id !== decisionId))
-          
-          toast({
-            title: "Decision Replay - Action Completed",
-            description: "The decision has been successfully deleted.",
-            variant: "default"
-          })
-        } catch (error) {
-          console.error('Failed to delete decision:', error)
-          toast({
-            title: "Decision Replay Alert",
-            description: "Failed to delete the decision. Please try again.",
-            variant: "destructive"
-          })
-        } finally {
-          setDeleting(null)
+          await decisionApi.remove(decisionId)
+          setDecisions((current) => current.filter((item) => item.decisionId !== decisionId))
+          toast({ title: "Decision deleted" })
+        } catch {
+          toast({ title: "Delete failed", variant: "destructive" })
         }
       },
-      {
-        title: "Delete Decision",
-        confirmText: "Delete",
-        cancelText: "Cancel",
-        variant: "destructive"
-      }
+      { title: "Delete decision", confirmText: "Delete", variant: "destructive" },
     )
   }
 
   return (
-    <main className="min-h-screen bg-background">
-      <div className="border-b border-border">
-        <div className="max-w-7xl mx-auto px-6 py-8">
-          <div className="flex items-center justify-between mb-2">
-            <div>
-              <h1 className="text-foreground">Decision Replay</h1>
-              <p className="text-muted-foreground mt-2">Review and audit all decisions with complete replay history</p>
+    <main className="min-h-screen bg-[#080b0d] text-slate-100">
+      <div className="mx-auto max-w-7xl px-5 py-10 lg:px-8">
+        <header className="flex flex-col gap-6 border-b border-white/10 pb-8 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.2em] text-green-300">
+              Versioned decision register
             </div>
-            <Link href="/decisions/new">
-              <Button className="gap-2">
-                <Plus className="w-4 h-4" />
-                New Decision
-              </Button>
-            </Link>
+            <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em]">Decision Replay</h1>
+            <p className="mt-2 text-sm text-slate-500">
+              Deterministic scores, explicit assumptions, and a complete audit trail.
+            </p>
           </div>
-        </div>
-      </div>
+          <Link href="/decisions/new">
+            <Button className="bg-green-400 text-black hover:bg-green-300">
+              <Plus className="mr-2 h-4 w-4" />
+              Analyze a decision
+            </Button>
+          </Link>
+        </header>
 
-      <div className="max-w-7xl mx-auto px-6 py-8 space-y-8">
-        <div className="space-y-4">
-          <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-muted-foreground" />
-            <span className="text-sm font-semibold text-foreground uppercase tracking-wide">Filters</span>
+        <div className="mt-7 grid gap-3 sm:grid-cols-[1fr_240px]">
+          <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-white/[0.025] px-4">
+            <Search className="h-4 w-4 text-slate-600" />
+            <input
+              value={query}
+              onChange={(event) => setQuery(event.target.value)}
+              placeholder="Search title or decision ID"
+              className="h-11 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-700"
+            />
           </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            {/* Search */}
-            <div className="flex items-center gap-2 px-3 py-2.5 bg-card rounded-lg border border-border hover:border-accent/50 transition-colors">
-              <Search className="w-4 h-4 text-muted-foreground" />
-              <input
-                type="text"
-                placeholder="Search by ID or description..."
-                value={searchId}
-                onChange={(e) => setSearchId(e.target.value)}
-                className="bg-transparent border-0 outline-none text-sm flex-1 text-foreground placeholder:text-muted-foreground"
-              />
-            </div>
-
-            {/* Status Filter */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</label>
-              <div className="flex gap-2 flex-wrap">
-                {statuses.map((status) => (
-                  <button
-                    key={status}
-                    onClick={() => toggleStatusFilter(status)}
-                    className={`px-3 py-1.5 text-xs font-medium rounded-md transition-all duration-200 ${
-                      localStatusFilter.includes(status)
-                        ? "bg-primary text-primary-foreground shadow-lg shadow-primary/20"
-                        : "bg-card text-muted-foreground border border-border hover:border-accent/50 hover:text-foreground"
-                    }`}
-                  >
-                    {status}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Domain Type Filter */}
-            <div className="space-y-2">
-              <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Domain</label>
-              <select
-                value={localDomainFilter}
-                onChange={(e) => setLocalDomainFilter(e.target.value)}
-                className="w-full px-3 py-2 text-sm bg-card border border-border rounded-lg text-foreground placeholder:text-muted-foreground hover:border-accent/50 transition-colors focus:border-accent focus:outline-none"
-              >
-                <option value="">All Domains</option>
-                {domainTypes.map((domain) => (
-                  <option key={domain} value={domain}>
-                    {domain}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
+          <select
+            value={domain}
+            onChange={(event) => setDomain(event.target.value)}
+            className="h-11 rounded-xl border border-white/10 bg-[#0d1217] px-4 text-sm text-slate-300 outline-none"
+          >
+            <option value="all">All domains</option>
+            {domains.map((item) => <option key={item}>{item}</option>)}
+          </select>
         </div>
 
-        <div className="space-y-4">
-          <p className="text-sm text-muted-foreground font-medium">
-            {loading ? 'Loading...' : `${filteredDecisions.length} decision${filteredDecisions.length !== 1 ? "s" : ""} found`}
-          </p>
-
-          {loading ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="bg-card border border-border rounded-lg p-5 h-64 animate-pulse">
-                  <div className="h-4 bg-muted rounded w-20 mb-4" />
-                  <div className="h-3 bg-muted rounded w-32 mb-4" />
-                  <div className="h-3 bg-muted rounded w-full mb-2" />
-                  <div className="h-3 bg-muted rounded w-3/4" />
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-              {filteredDecisions.map((decision) => {
-                const feasibilityScore = getFeasibilityScore(decision)
-                const isDeleting = deleting === decision.id
-                return (
-                  <div key={decision.id} className="group relative bg-card border border-border rounded-lg p-5 hover:border-accent/50 hover:shadow-xl hover:shadow-primary/10 transition-all duration-300 h-full">
-                    {/* Delete Button */}
+        {loading ? (
+          <div className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {[0, 1, 2].map((item) => <div key={item} className="h-60 animate-pulse rounded-2xl bg-white/[0.04]" />)}
+          </div>
+        ) : filtered.length === 0 ? (
+          <Card className="mt-8 border-dashed border-white/15 bg-white/[0.02]">
+            <CardContent className="p-12 text-center">
+              <AlertTriangle className="mx-auto h-8 w-8 text-slate-600" />
+              <h2 className="mt-4 font-semibold">No decisions found</h2>
+              <p className="mt-2 text-sm text-slate-500">Create a decision or change the current filters.</p>
+            </CardContent>
+          </Card>
+        ) : (
+          <section className="mt-8 grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+            {filtered.map((item) => (
+              <Card key={item.decisionId} className="group overflow-hidden border-white/10 bg-slate-950/70 transition hover:-translate-y-1 hover:border-green-400/25">
+                <div className="h-px bg-gradient-to-r from-transparent via-green-400/70 to-transparent opacity-0 transition group-hover:opacity-100" />
+                <CardContent className="p-5">
+                  <div className="flex items-start justify-between gap-4">
+                    <div>
+                      <Badge variant="outline" className="border-white/10 text-slate-400">{item.domain}</Badge>
+                      <h2 className="mt-4 line-clamp-2 min-h-12 text-lg font-semibold leading-6">{item.title}</h2>
+                    </div>
                     <button
-                      onClick={(e) => handleDeleteDecision(decision.id, e)}
-                      disabled={isDeleting}
-                      className="absolute top-3 right-3 p-2 text-muted-foreground hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-md transition-all duration-200 opacity-0 group-hover:opacity-100 z-10"
+                      aria-label={`Delete ${item.title}`}
+                      onClick={() => removeDecision(item.decisionId)}
+                      className="rounded-lg p-2 text-slate-700 transition hover:bg-red-400/10 hover:text-red-300"
                     >
-                      {isDeleting ? (
-                        <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                        <Trash2 className="w-4 h-4" />
-                      )}
+                      <Trash2 className="h-4 w-4" />
                     </button>
-
-                    <Link href={`/decisions/${decision.id}/analysis`} className="block h-full">
-                      <div className="space-y-4 h-full">
-                        {/* Header */}
-                        <div className="flex items-start justify-between pr-8">
-                          <div className="flex-1 min-w-0">
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Decision</p>
-                            <p className="text-sm font-mono text-foreground mt-1 group-hover:text-accent transition-colors truncate">
-                              {decision.id.slice(0, 8)}...
-                            </p>
-                          </div>
-                          <OutcomeBadge outcome={decision.outcome} size="sm" />
-                        </div>
-
-                        {/* Description Preview */}
-                        <div>
-                          <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Description</p>
-                          <p className="text-sm text-foreground mt-1 line-clamp-2">
-                            {getPreview(decision.naturalLanguageInput, 80)}
-                          </p>
-                        </div>
-
-                        {/* Domain Type */}
-                        {decision.domainType && (
-                          <div>
-                            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Domain</p>
-                            <p className="text-sm text-foreground font-medium mt-1">{decision.domainType}</p>
-                          </div>
-                        )}
-
-                        {/* Feasibility Score (if analyzed) */}
-                        {feasibilityScore !== null && (
-                          <div>
-                            <div className="flex items-center justify-between mb-2">
-                              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Feasibility</p>
-                              <p className="text-sm font-bold text-foreground">{Math.round(feasibilityScore)}%</p>
-                            </div>
-                            <div className="h-1.5 bg-secondary rounded-full overflow-hidden">
-                              <div
-                                className={`h-full transition-all ${
-                                  feasibilityScore >= 70
-                                    ? "bg-emerald-500"
-                                    : feasibilityScore >= 40
-                                    ? "bg-amber-500"
-                                    : "bg-red-500"
-                                }`}
-                                style={{ width: `${Math.max(0, Math.min(100, feasibilityScore))}%` }}
-                              />
-                            </div>
-                          </div>
-                        )}
-
-                        {/* Actions */}
-                        <div className="flex items-center justify-between pt-2 mt-auto">
-                          <div className="flex items-center gap-3">
-                            <div className="flex items-center gap-1">
-                              <Eye className="w-4 h-4 text-muted-foreground" />
-                              <span className="text-xs text-muted-foreground">View</span>
-                            </div>
-                            {feasibilityScore !== null && (
-                              <div className="flex items-center gap-1">
-                                <BarChart3 className="w-4 h-4 text-emerald-600" />
-                                <span className="text-xs text-emerald-600">Analyzed</span>
-                              </div>
-                            )}
-                          </div>
-                          <time className="text-xs text-muted-foreground">
-                            {new Date(decision.createdAt).toLocaleDateString()}
-                          </time>
-                        </div>
-                      </div>
-                    </Link>
                   </div>
-                )
-              })}
-            </div>
-          )}
 
-          {!loading && filteredDecisions.length === 0 && (
-            <div className="text-center py-16">
-              <p className="text-muted-foreground">No decisions match your filters</p>
-            </div>
-          )}
-        </div>
+                  <div className="mt-6 grid grid-cols-3 gap-2 border-y border-white/10 py-4 text-center">
+                    <div>
+                      <div className={`text-2xl font-semibold ${scoreTone(item.feasibilityScore)}`}>
+                        {Math.round(item.feasibilityScore)}
+                      </div>
+                      <div className="text-[9px] uppercase tracking-wider text-slate-600">Score</div>
+                    </div>
+                    <div className="border-x border-white/10">
+                      <div className="text-2xl font-semibold">{item.riskCount}</div>
+                      <div className="text-[9px] uppercase tracking-wider text-slate-600">Risks</div>
+                    </div>
+                    <div>
+                      <div className="text-2xl font-semibold">{item.missingFieldCount}</div>
+                      <div className="text-[9px] uppercase tracking-wider text-slate-600">Missing</div>
+                    </div>
+                  </div>
+
+                  <div className="mt-4 flex items-center justify-between">
+                    <Badge className={riskTone(item.riskLevel)}>{item.riskLevel} risk</Badge>
+                    <span className="text-xs text-slate-600">v{item.version}</span>
+                  </div>
+                  <Link
+                    href={`/decisions/${item.decisionId}/analytics`}
+                    className="mt-5 flex items-center justify-between rounded-lg border border-white/10 px-3 py-2 text-xs font-semibold text-slate-300 transition hover:border-green-400/25 hover:bg-green-400/[0.05]"
+                  >
+                    Open decision report
+                    <ArrowUpRight className="h-4 w-4" />
+                  </Link>
+                </CardContent>
+              </Card>
+            ))}
+          </section>
+        )}
       </div>
       <ConfirmComponent />
     </main>

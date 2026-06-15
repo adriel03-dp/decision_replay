@@ -1,134 +1,79 @@
 using DecisionReplay.Domain.Enums;
 using DecisionReplay.Domain.ValueObjects;
-using System.Diagnostics.CodeAnalysis;
 using MongoDB.Bson;
 using MongoDB.Bson.Serialization.Attributes;
 
 namespace DecisionReplay.Domain.Entities;
 
-/// <summary>
-/// REFACTORED Decision Entity - Domain-Agnostic Design
-/// 
-/// SOLID Principles Applied:
-/// - Single Responsibility: Manages decision lifecycle and state
-/// - Open/Closed: Extensible via DecisionContext without modifying entity
-/// - Dependency Inversion: Depends on value objects (abstractions), not concrete implementations
-/// 
-/// Clean Architecture:
-/// - Pure domain entity with no infrastructure dependencies
-/// - Business logic encapsulated within the entity
-/// - Immutable where appropriate (Id, CreatedAt)
-/// 
-/// Domain-Agnostic Design:
-/// - Uses natural language input instead of rigid fields
-/// - DecisionContext holds flexible metadata inferred by AI
-/// - DecisionSchema allows different domains without code changes
-/// </summary>
 [BsonIgnoreExtraElements]
-public class DecisionV2
+public sealed class DecisionV2
 {
     [BsonId]
     [BsonGuidRepresentation(GuidRepresentation.Standard)]
     public Guid Id { get; set; }
 
-    // Core decision data - domain-agnostic
-    public DecisionContext Context { get; set; }
-    public DecisionSchema? Schema { get; set; }
-    public DecisionAnalysis? Analysis { get; set; }
-
-    // Lifecycle
-    public DecisionStatus Status { get; set; }
-    public DecisionOutcome Outcome { get; set; }
+    public string CreatedBy { get; set; } = string.Empty;
+    public string DomainType { get; set; } = string.Empty;
+    public string OriginalInput { get; set; } = string.Empty;
+    public int CurrentVersion { get; set; }
+    public List<DecisionVersion> Versions { get; set; } = new();
+    public List<AuditTrailEntry> AuditTrail { get; set; } = new();
+    public DecisionStatus Status { get; set; } = DecisionStatus.Draft;
+    public DecisionOutcome Outcome { get; set; } = DecisionOutcome.Draft;
     public DateTime CreatedAt { get; set; }
     public DateTime? LastModifiedAt { get; set; }
-    public string CreatedBy { get; set; }
 
-    // Domain classification (detected automatically from input)
-    public string? DomainType { get; set; }
-
-    // Public parameterless constructor for MongoDB
     public DecisionV2()
     {
-        // MongoDB will set all properties via reflection
-        // Don't initialize Context here - let MongoDB deserialize it
-        Context = null!;
-        CreatedBy = string.Empty;
     }
 
-    [SetsRequiredMembers]
-    public DecisionV2(DecisionContext context, string createdBy)
+    public DecisionV2(
+        Guid id,
+        string naturalLanguageInput,
+        string createdBy,
+        DecisionVersion initialVersion)
     {
-        if (context == null)
-            throw new ArgumentNullException(nameof(context));
+        if (string.IsNullOrWhiteSpace(naturalLanguageInput))
+            throw new ArgumentException("Decision input is required", nameof(naturalLanguageInput));
         if (string.IsNullOrWhiteSpace(createdBy))
-            throw new ArgumentException("Creator must be specified", nameof(createdBy));
+            throw new ArgumentException("Creator is required", nameof(createdBy));
+        if (initialVersion == null)
+            throw new ArgumentNullException(nameof(initialVersion));
 
-        Id = Guid.NewGuid();
-        Context = context;
+        Id = id == Guid.Empty ? Guid.NewGuid() : id;
+        OriginalInput = naturalLanguageInput.Trim();
         CreatedBy = createdBy;
-        Status = DecisionStatus.Draft;
-        Outcome = DecisionOutcome.Draft;
+        DomainType = initialVersion.StructuredData.Domain;
+        CurrentVersion = initialVersion.Version;
+        Versions = new List<DecisionVersion> { initialVersion };
         CreatedAt = DateTime.UtcNow;
+        LastModifiedAt = CreatedAt;
+        ApplyAssessmentState(initialVersion.Feasibility);
     }
 
-    /// <summary>
-    /// Associates a dynamically generated schema with this decision
-    /// </summary>
-    public void AssignSchema(DecisionSchema schema)
+    public DecisionVersion? GetCurrentVersion() =>
+        Versions.OrderByDescending(version => version.Version).FirstOrDefault();
+
+    public void AddVersion(DecisionVersion version)
     {
-        Schema = schema ?? throw new ArgumentNullException(nameof(schema));
+        if (version.Version != CurrentVersion + 1)
+            throw new InvalidOperationException("Decision versions must be sequential");
+
+        Versions.Add(version);
+        CurrentVersion = version.Version;
+        DomainType = version.StructuredData.Domain;
         LastModifiedAt = DateTime.UtcNow;
+        ApplyAssessmentState(version.Feasibility);
     }
 
-    /// <summary>
-    /// Stores AI-generated analysis and updates status based on feasibility
-    /// </summary>
-    public void StoreAnalysis(DecisionAnalysis analysis)
+    private void ApplyAssessmentState(FeasibilityAssessment assessment)
     {
-        Analysis = analysis ?? throw new ArgumentNullException(nameof(analysis));
         Status = DecisionStatus.Analyzed;
-
-        // Set outcome based on feasibility score
-        Outcome = analysis.FeasibilityScore switch
+        Outcome = assessment.FeasibilityScore switch
         {
-            >= 70 => DecisionOutcome.Feasible,
-            >= 50 => DecisionOutcome.RiskyButPossible,
+            >= 75 => DecisionOutcome.Feasible,
+            >= 55 => DecisionOutcome.RiskyButPossible,
             _ => DecisionOutcome.NeedsAdjustment
         };
-
-        LastModifiedAt = DateTime.UtcNow;
-    }
-
-    /// <summary>
-    /// Updates decision context (for replay scenarios)
-    /// </summary>
-    public void UpdateContext(DecisionContext newContext)
-    {
-        Context = newContext ?? throw new ArgumentNullException(nameof(newContext));
-        LastModifiedAt = DateTime.UtcNow;
-        // Reset analysis since context changed - must be re-evaluated
-        Analysis = null;
-    }
-
-    /// <summary>
-    /// Commits the decision
-    /// </summary>
-    public void CommitDecision()
-    {
-        if (Analysis == null)
-            throw new InvalidOperationException("Cannot commit decision without analysis");
-
-        Status = DecisionStatus.Finalized;
-        Outcome = DecisionOutcome.Committed;
-        LastModifiedAt = DateTime.UtcNow;
-    }
-
-    /// <summary>
-    /// Checks if decision needs re-analysis (for replay capability)
-    /// </summary>
-    public bool NeedsReAnalysis()
-    {
-        return Analysis == null ||
-               (LastModifiedAt.HasValue && Analysis.GeneratedAt < LastModifiedAt.Value);
     }
 }

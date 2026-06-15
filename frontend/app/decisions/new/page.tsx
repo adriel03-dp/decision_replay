@@ -1,268 +1,189 @@
 "use client"
 
 import { useState } from "react"
-import { useRouter } from "next/navigation"
+import axios from "axios"
 import Link from "next/link"
-import { ChevronLeft, Sparkles, Clock, DollarSign, Target, Save, FileText } from "lucide-react"
+import { useRouter } from "next/navigation"
+import {
+  ArrowLeft,
+  ArrowRight,
+  Braces,
+  CheckCircle2,
+  FileText,
+  Gauge,
+  Loader2,
+  LockKeyhole,
+  Route,
+} from "lucide-react"
 import { Button } from "@/components/ui/button"
-import { Card } from "@/components/ui/card"
-import { useAuth } from "@/lib/auth-context"
-import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
 import { decisionApi } from "@/lib/api"
+import { useToast } from "@/hooks/use-toast"
+
+const EXAMPLE =
+  "I want to launch a subscription meal-planning app for busy professionals. My budget is $35,000, the timeline is 6 months, and I have a team of 3. The first release needs onboarding, weekly plans, payments, and basic analytics. I need to validate demand before committing the full budget."
+
+const PIPELINE = [
+  ["Extract", "Groq converts your text into typed fields."],
+  ["Validate", "The backend checks constraints and missing evidence."],
+  ["Score", "Versioned rules calculate feasibility and risk."],
+  ["Plan", "A bounded roadmap is built from the structured result."],
+]
 
 export default function NewDecisionPage() {
   const router = useRouter()
-  const { user } = useAuth()
   const { toast } = useToast()
-  const [decisionInput, setDecisionInput] = useState("")
+  const [input, setInput] = useState("")
   const [submitting, setSubmitting] = useState(false)
-  const [analyzing, setAnalyzing] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const validateInput = () => {
-    const trimmedInput = decisionInput.trim()
-
-    if (!trimmedInput) {
-      toast({
-        title: "Input Required",
-        description: "Please describe your decision before proceeding.",
-        variant: "destructive"
-      })
-      return false
+  async function handleAnalyze() {
+    if (input.trim().length < 10) {
+      setError("Describe the decision in at least 10 characters.")
+      return
     }
 
-    if (trimmedInput.length < 20) {
-      toast({
-        title: "More Details Needed",
-        description: "Please provide more details about your decision (at least 20 characters).",
-        variant: "destructive"
-      })
-      return false
-    }
-
-    if (!user) {
-      toast({
-        title: "Authentication Required",
-        description: "Please log in to create a decision.",
-        variant: "destructive"
-      })
-      router.push('/login')
-      return false
-    }
-
-    return true
-  }
-
-  const handleCreateDecision = async (analyzeNow: boolean) => {
-    if (!validateInput()) return
-
-    if (analyzeNow) setAnalyzing(true)
-    else setSubmitting(true)
-
+    setSubmitting(true)
+    setError(null)
     try {
-      const decision = await decisionApi.createDecision({
-        input: decisionInput.trim(),
-        createdBy: user?.email || 'user@example.com',
-        analyzeNow: analyzeNow
-      })
-
-      if (analyzeNow) {
-        toast({
-          title: "Analysis Complete!",
-          description: "Your decision has been analyzed and saved.",
-          variant: "default"
-        })
-      } else {
-        toast({
-          title: "Draft Saved",
-          description: "Your decision has been saved as a draft.",
-          variant: "default"
-        })
-      }
-
-      router.push(`/decisions/${decision.id}`)
-    } catch (error) {
-      console.error('Failed to create decision:', error)
+      const result = await decisionApi.analyze(input.trim())
       toast({
-        title: "Operation Failed",
-        description: "Failed to create decision. Please try again.",
-        variant: "destructive"
+        title: "Decision analyzed",
+        description: `Version ${result.version} scored ${Math.round(result.feasibilityScore)}/100.`,
       })
+      router.push(`/decisions/${result.decisionId}/analytics`)
+    } catch (requestError) {
+      const message = axios.isAxiosError(requestError)
+        ? requestError.response?.data?.message ?? "The decision could not be analyzed."
+        : "The decision could not be analyzed."
+      setError(message)
     } finally {
-      setAnalyzing(false)
       setSubmitting(false)
     }
   }
 
-  const examplePrompts = [
-    "Launch a mobile app with authentication and chat features in 3 months. Team: 2 iOS devs, 1 backend dev. Budget: $75k.",
-    "Build a 2-story house with 4 bedrooms in 8 months. Budget: $350k. Location: suburban area with zoning restrictions.",
-    "Implement microservices migration for a monolithic e-commerce platform. Timeline: 6 months. Team: 5 engineers, 1 architect.",
-    "Create an AI-powered customer support chatbot with multi-language support. Timeline: 4 months. Budget: $90k. Must integrate with existing CRM."
-  ]
-
   return (
-    <main className="min-h-screen bg-gradient-to-br from-white to-green-50 dark:from-slate-950 dark:to-slate-900">
-      <div className="bg-white/80 dark:bg-slate-950/80 backdrop-blur border-b border-green-100 dark:border-slate-800">
-        <div className="max-w-4xl mx-auto px-6 py-4 flex items-center gap-4">
-          <Link href="/decisions">
-            <Button variant="ghost" size="sm">
-              <ChevronLeft className="w-4 h-4 mr-2" />
-              Back
-            </Button>
-          </Link>
-          <h1 className="text-2xl font-bold">Create New Decision</h1>
-        </div>
-      </div>
+    <main className="min-h-screen bg-[#080b0d] text-slate-100">
+      <div
+        className="pointer-events-none fixed inset-0 opacity-80"
+        style={{
+          background:
+            "radial-gradient(circle at 15% 10%, rgba(34,197,94,.15), transparent 30%), radial-gradient(circle at 88% 20%, rgba(14,165,233,.1), transparent 26%), repeating-linear-gradient(90deg, rgba(255,255,255,.02) 0, rgba(255,255,255,.02) 1px, transparent 1px, transparent 80px)",
+        }}
+      />
+      <div className="relative mx-auto max-w-6xl px-5 py-10 lg:py-16">
+        <Link
+          href="/decisions"
+          className="inline-flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.18em] text-slate-500 transition hover:text-white"
+        >
+          <ArrowLeft className="h-4 w-4" />
+          Decision register
+        </Link>
 
-      <div className="max-w-4xl mx-auto px-6 py-8">
-        {/* Header */}
-        <div className="mb-8">
-          <div className="flex items-center gap-2 mb-3">
-            <Sparkles className="w-5 h-5 text-green-600 dark:text-green-400" />
-            <h2 className="text-xl font-bold">Decision Workspace</h2>
-          </div>
-          <p className="text-foreground/60">
-            Describe your decision in natural language. Gemini AI will analyze feasibility, identify risks, and provide structured recommendations.
-          </p>
-        </div>
-
-        {/* Main Form */}
-        <div className="space-y-6">
-          <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
-            <label className="block text-sm font-semibold mb-3">
-              Describe Your Decision <span className="text-red-600">*</span>
-            </label>
-            <textarea
-              value={decisionInput}
-              onChange={(e) => setDecisionInput(e.target.value)}
-              placeholder="Example: Launch a mobile app with authentication and real-time chat in 3 months. Team: 2 iOS developers, 1 backend engineer. Budget: $75,000. Constraints: Must support 10K concurrent users."
-              rows={8}
-              className="w-full px-4 py-3 text-sm bg-white dark:bg-slate-800 border border-green-200 dark:border-slate-700 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-transparent resize-none"
-              disabled={submitting || analyzing}
-            />
-            <p className="text-xs text-foreground/50 mt-2">
-              {decisionInput.length} characters (minimum 20 required)
+        <div className="mt-8 grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
+          <section>
+            <Badge className="border-green-400/20 bg-green-400/10 text-green-300">
+              <LockKeyhole className="mr-1 h-3 w-3" />
+              Rules are the authority
+            </Badge>
+            <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
+              Turn a messy decision into an auditable plan.
+            </h1>
+            <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
+              Include the goal, budget, timeline, resources, scope, and constraints you know.
+              Missing details are reported, never silently invented. Groq handles language only;
+              deterministic backend rules own every score and risk level.
             </p>
-          </Card>
 
-          {/* Context Hints */}
-          <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
-            <h3 className="text-sm font-semibold mb-4">AI will automatically infer:</h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div className="flex items-start gap-3">
-                <Clock className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-sm">Timeline</div>
-                  <div className="text-xs text-foreground/60">Start, end, milestones</div>
+            <Card className="mt-8 overflow-hidden border-white/10 bg-slate-950/80 shadow-2xl shadow-black/30">
+              <div className="h-1 bg-gradient-to-r from-green-400 via-emerald-400 to-sky-400" />
+              <CardContent className="p-5 sm:p-7">
+                <div className="mb-3 flex items-center justify-between gap-4">
+                  <label htmlFor="decision-input" className="text-sm font-semibold">
+                    Describe the decision
+                  </label>
+                  <span className="text-xs text-slate-600">{input.length}/20,000</span>
                 </div>
+                <textarea
+                  id="decision-input"
+                  value={input}
+                  maxLength={20000}
+                  onChange={(event) => setInput(event.target.value)}
+                  placeholder="What are you deciding, and what constraints make it difficult?"
+                  className="min-h-64 w-full resize-y rounded-xl border border-white/10 bg-black/25 p-4 text-sm leading-7 text-slate-200 outline-none transition placeholder:text-slate-700 focus:border-green-400/50 focus:ring-2 focus:ring-green-400/10"
+                />
+                {error && (
+                  <div role="alert" className="mt-3 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
+                    {error}
+                  </div>
+                )}
+                <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <button
+                    type="button"
+                    onClick={() => setInput(EXAMPLE)}
+                    className="text-left text-xs font-medium text-slate-500 transition hover:text-sky-300"
+                  >
+                    Use an example decision
+                  </button>
+                  <Button
+                    onClick={handleAnalyze}
+                    disabled={submitting}
+                    className="bg-green-400 text-black hover:bg-green-300"
+                  >
+                    {submitting ? (
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    ) : (
+                      <Gauge className="mr-2 h-4 w-4" />
+                    )}
+                    Analyze and build plan
+                    {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          </section>
+
+          <aside className="lg:pt-20">
+            <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
+              <div className="flex items-center gap-2 text-sm font-semibold">
+                <Route className="h-4 w-4 text-sky-300" />
+                What happens next
               </div>
-              <div className="flex items-start gap-3">
-                <DollarSign className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-sm">Budget</div>
-                  <div className="text-xs text-foreground/60">Cost constraints</div>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <Target className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
-                <div>
-                  <div className="font-semibold text-sm">Scope</div>
-                  <div className="text-xs text-foreground/60">Requirements, deliverables</div>
-                </div>
+              <div className="mt-6 space-y-0">
+                {PIPELINE.map(([title, description], index) => (
+                  <div key={title} className="grid grid-cols-[32px_1fr] gap-3">
+                    <div className="relative flex justify-center">
+                      <div className="z-10 grid h-7 w-7 place-items-center rounded-full border border-white/15 bg-slate-950 text-[10px] font-semibold text-green-300">
+                        {index + 1}
+                      </div>
+                      {index < PIPELINE.length - 1 && <div className="absolute bottom-0 top-7 w-px bg-white/10" />}
+                    </div>
+                    <div className="pb-6">
+                      <h2 className="text-sm font-medium">{title}</h2>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+                    </div>
+                  </div>
+                ))}
               </div>
             </div>
-          </Card>
 
-          {/* Example Prompts */}
-          <Card className="p-6 border-green-100 dark:border-slate-700 bg-white/50 dark:bg-slate-900/50 backdrop-blur">
-            <h3 className="text-sm font-semibold mb-3">Example Decisions:</h3>
-            <div className="space-y-2">
-              {examplePrompts.map((prompt, idx) => (
-                <button
-                  key={idx}
-                  type="button"
-                  onClick={() => setDecisionInput(prompt)}
-                  className="w-full text-left px-4 py-3 text-xs bg-green-50 dark:bg-slate-800 border border-green-100 dark:border-slate-700 rounded-lg hover:bg-green-100 dark:hover:bg-slate-700 transition-colors"
-                  disabled={submitting || analyzing}
-                >
-                  {prompt}
-                </button>
-              ))}
+            <div className="mt-4 grid grid-cols-3 gap-3">
+              {[
+                [Braces, "Structured"],
+                [CheckCircle2, "Testable"],
+                [FileText, "Exportable"],
+              ].map(([Icon, label]) => {
+                const IconComponent = Icon as typeof Braces
+                return (
+                  <div key={label as string} className="rounded-xl border border-white/10 bg-white/[0.025] p-4 text-center">
+                    <IconComponent className="mx-auto h-4 w-4 text-slate-400" />
+                    <div className="mt-2 text-[10px] uppercase tracking-wider text-slate-600">{label as string}</div>
+                  </div>
+                )
+              })}
             </div>
-          </Card>
-
-          {/* Action Buttons */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-            <Button
-              onClick={() => handleCreateDecision(true)}
-              className="bg-gradient-to-r from-blue-500 to-cyan-600 hover:from-blue-600 hover:to-cyan-700"
-              disabled={submitting || analyzing}
-            >
-              {analyzing ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Analyzing...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4 mr-2" />
-                  Analyze & Save
-                </>
-              )}
-            </Button>
-
-            <Button
-              onClick={() => handleCreateDecision(false)}
-              variant="outline"
-              className="border-green-200 dark:border-green-700 hover:border-green-400 dark:hover:border-green-500 hover:bg-green-50 dark:hover:bg-green-900/20"
-              disabled={submitting || analyzing}
-            >
-              {submitting ? (
-                <>
-                  <div className="w-4 h-4 border-2 border-green-600 border-t-transparent rounded-full animate-spin mr-2"></div>
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <FileText className="w-4 h-4 mr-2" />
-                  Save as Draft
-                </>
-              )}
-            </Button>
-
-            <Link href="/decisions" className="flex">
-              <Button variant="outline" className="w-full" disabled={submitting || analyzing}>
-                Cancel
-              </Button>
-            </Link>
-          </div>
-
-          {/* Info Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-4">
-            <Card className="p-4 border-blue-100 dark:border-blue-700 bg-blue-50/50 dark:bg-blue-900/20 backdrop-blur">
-              <div className="flex items-start gap-3">
-                <Sparkles className="w-5 h-5 text-blue-600 dark:text-blue-400 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-sm text-blue-900 dark:text-blue-100">Analyze & Save</h4>
-                  <p className="text-xs text-blue-700 dark:text-blue-300 mt-1">
-                    Get instant AI analysis and save the decision. Best for complete inputs.
-                  </p>
-                </div>
-              </div>
-            </Card>
-
-            <Card className="p-4 border-green-100 dark:border-green-700 bg-green-50/50 dark:bg-green-900/20 backdrop-blur">
-              <div className="flex items-start gap-3">
-                <FileText className="w-5 h-5 text-green-600 dark:text-green-400 mt-0.5" />
-                <div>
-                  <h4 className="font-semibold text-sm text-green-900 dark:text-green-100">Save as Draft</h4>
-                  <p className="text-xs text-green-700 dark:text-green-300 mt-1">
-                    Save without analysis. Useful for quick capture or when offline. You can analyze later.
-                  </p>
-                </div>
-              </div>
-            </Card>
-          </div>
+          </aside>
         </div>
       </div>
     </main>

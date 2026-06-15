@@ -31,6 +31,13 @@ public sealed class DecisionV2Repository : IDecisionV2Repository
             .FirstOrDefaultAsync();
     }
 
+    public async Task<DecisionV2?> GetByIdForUserAsync(Guid decisionId, string userId)
+    {
+        return await _decisions
+            .Find(d => d.Id == decisionId && d.CreatedBy == userId)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task<IReadOnlyList<DecisionV2>> GetAllAsync()
     {
         return await _decisions
@@ -58,5 +65,12 @@ public sealed class DecisionV2Repository : IDecisionV2Repository
     public async Task DeleteAsync(Guid decisionId)
     {
         await _decisions.DeleteOneAsync(d => d.Id == decisionId);
+    }
+
+    public async Task<bool> DeleteForUserAsync(Guid decisionId, string userId)
+    {
+        var result = await _decisions.DeleteOneAsync(
+            d => d.Id == decisionId && d.CreatedBy == userId);
+        return result.DeletedCount > 0;
     }
 }
