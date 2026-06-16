@@ -25,10 +25,10 @@ const EXAMPLE =
   "I want to launch a subscription meal-planning app for busy professionals. My budget is $35,000, the timeline is 6 months, and I have a team of 3. The first release needs onboarding, weekly plans, payments, and basic analytics. I need to validate demand before committing the full budget."
 
 const PIPELINE = [
-  ["Describe", "Share the decision, constraints, and uncertainty in your own words."],
-  ["Clarify", "Decision Replay highlights what is known, missing, and assumed."],
-  ["Evaluate", "The system turns the situation into a practical decision profile."],
-  ["Act", "You receive a plan you can compare, revisit, and improve."],
+  ["Submit", "Share the current version of your idea, even if it is still rough."],
+  ["Grade", "Decision Replay measures feasibility and highlights what is holding it back."],
+  ["Improve", "You get specific advice on what to change, add, reduce, or validate."],
+  ["Execute", "The upgraded roadmap shows what to do next to make the plan stronger."],
 ]
 
 export default function NewDecisionPage() {
@@ -49,8 +49,8 @@ export default function NewDecisionPage() {
     try {
       const result = await decisionApi.analyze(input.trim())
       toast({
-        title: "Decision analyzed",
-        description: `Version ${result.version} scored ${Math.round(result.feasibilityScore)}/100.`,
+        title: "Plan graded",
+        description: `Version ${result.version} received a ${Math.round(result.feasibilityScore)}/100 plan grade.`,
       })
       router.push(`/decisions/${result.decisionId}/analytics`)
     } catch (requestError) {
@@ -85,14 +85,15 @@ export default function NewDecisionPage() {
           <section>
             <Badge className="border-green-400/20 bg-green-400/10 text-green-300">
               <Compass className="mr-1 h-3 w-3" />
-              Built for confident commitments
+              Built to improve your plan
             </Badge>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-              Turn a messy decision into an auditable plan.
+              Turn a basic idea into a stronger execution plan.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
-              Include the goal, budget, timeline, resources, scope, and constraints you know. Decision Replay helps
-              you understand the opportunity, expose weak spots, and move forward with a clearer action plan.
+              Include the goal, budget, timeline, resources, scope, and constraints you know. Decision Replay grades
+              the idea, exposes the flaws, and gives you the exact improvement advice needed to move toward a more
+              feasible outcome.
             </p>
 
             <Card className="mt-8 overflow-hidden border-white/10 bg-slate-950/80 shadow-2xl shadow-black/30">
@@ -109,7 +110,7 @@ export default function NewDecisionPage() {
                   value={input}
                   maxLength={20000}
                   onChange={(event) => setInput(event.target.value)}
-                  placeholder="What are you deciding, and what constraints make it difficult?"
+                  placeholder="Describe your idea, current plan, constraints, and what you want to make more feasible."
                   className="min-h-64 w-full resize-y rounded-xl border border-white/10 bg-black/25 p-4 text-sm leading-7 text-slate-200 outline-none transition placeholder:text-slate-700 focus:border-green-400/50 focus:ring-2 focus:ring-green-400/10"
                 />
                 {error && (
@@ -135,7 +136,7 @@ export default function NewDecisionPage() {
                     ) : (
                       <Gauge className="mr-2 h-4 w-4" />
                     )}
-                    Analyze and build plan
+                    Grade and improve plan
                     {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
                   </Button>
                 </div>

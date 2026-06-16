@@ -45,9 +45,9 @@ export default function AnalyticsPage() {
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">Portfolio view</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em]">Decision analytics</h1>
-            <p className="mt-2 text-sm text-slate-500">A portfolio view of your analyzed decisions and open risks.</p>
+            <p className="mt-2 text-sm text-slate-500">A portfolio view of plan grades, open risks, and improvement gaps.</p>
           </div>
-          <Link href="/decisions/new"><Button className="bg-green-400 text-black hover:bg-green-300"><Plus className="mr-2 h-4 w-4" />New decision</Button></Link>
+          <Link href="/decisions/new"><Button className="bg-green-400 text-black hover:bg-green-300"><Plus className="mr-2 h-4 w-4" />Improve a plan</Button></Link>
         </header>
 
         {loading ? (
@@ -57,7 +57,7 @@ export default function AnalyticsPage() {
             <CardContent className="p-12 text-center">
               <BarChart3 className="mx-auto h-9 w-9 text-slate-700" />
               <h2 className="mt-4 font-semibold">No analytics yet</h2>
-              <p className="mt-2 text-sm text-slate-600">Analyze a decision to populate this dashboard.</p>
+              <p className="mt-2 text-sm text-slate-600">Improve a plan to populate this dashboard.</p>
             </CardContent>
           </Card>
         ) : (
@@ -65,7 +65,7 @@ export default function AnalyticsPage() {
             <section className="mt-7 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
               {[
                 [Target, "Decisions", decisions.length, "Stored decision records"],
-                [Activity, "Average score", `${Math.round(metrics.average)}/100`, "Across current versions"],
+                [Activity, "Average grade", `${Math.round(metrics.average)}/100`, "Across current versions"],
                 [ShieldAlert, "High risk", metrics.highRisk, "High or critical"],
                 [AlertTriangle, "Missing fields", metrics.missing, "Evidence still required"],
               ].map(([Icon, label, value, detail]) => {

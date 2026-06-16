@@ -80,13 +80,13 @@ export default function DecisionsPage() {
             </div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em]">Decision Replay</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Clear decision profiles, visible assumptions, and every version in one place.
+              Plan grades, improvement gaps, and every upgraded version in one place.
             </p>
           </div>
           <Link href="/decisions/new">
             <Button className="bg-green-400 text-black hover:bg-green-300">
               <Plus className="mr-2 h-4 w-4" />
-              Analyze a decision
+              Improve a plan
             </Button>
           </Link>
         </header>
@@ -148,7 +148,7 @@ export default function DecisionsPage() {
                       <div className={`text-2xl font-semibold ${scoreTone(item.feasibilityScore)}`}>
                         {Math.round(item.feasibilityScore)}
                       </div>
-                      <div className="text-[9px] uppercase tracking-wider text-slate-600">Score</div>
+                      <div className="text-[9px] uppercase tracking-wider text-slate-600">Grade</div>
                     </div>
                     <div className="border-x border-white/10">
                       <div className="text-2xl font-semibold">{item.riskCount}</div>

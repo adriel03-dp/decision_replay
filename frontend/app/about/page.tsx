@@ -5,18 +5,18 @@ import { Button } from "@/components/ui/button"
 const PRINCIPLES = [
   {
     icon: Scale,
-    title: "Clarity before commitment",
-    description: "Turn loose ideas, constraints, and unknowns into a decision view you can actually act on.",
+    title: "Every idea gets graded",
+    description: "Turn loose ideas, constraints, and unknowns into a clear view of what is strong and what needs work.",
   },
   {
     icon: Compass,
-    title: "AI that supports judgment",
-    description: "Use intelligent guidance to understand trade-offs, pressure points, and next steps before you commit.",
+    title: "Flaws become next steps",
+    description: "Use intelligent guidance to spot weak points and turn them into practical improvements.",
   },
   {
     icon: History,
-    title: "Every what-if is comparable",
-    description: "Replay decisions as budgets, timelines, resources, and scope change, then compare the impact clearly.",
+    title: "Plans keep getting better",
+    description: "Replay decisions as budgets, timelines, resources, and scope change, then compare which version is stronger.",
   },
 ]
 
@@ -30,12 +30,12 @@ export default function AboutPage() {
             AI-integrated decision intelligence
           </div>
           <h1 className="mt-7 text-5xl font-semibold tracking-[-0.05em] sm:text-6xl">
-            Built to turn uncertain choices into confident action.
+            Built to improve plans before they become commitments.
           </h1>
           <p className="mt-6 max-w-3xl text-lg leading-8 text-slate-400">
-            Decision Replay helps people think through complex plans before they spend time, money, or reputation on
-            the wrong move. Describe what you want to do, add the constraints you already know, and get a clearer path
-            for deciding what comes next.
+            Decision Replay helps people take an early idea, grade its feasibility, identify the flaws, and turn the
+            basic version into a stronger plan. The goal is simple: help users understand what to improve and what to
+            do next before spending time, money, or reputation on the wrong move.
           </p>
         </div>
 
@@ -54,8 +54,8 @@ export default function AboutPage() {
             <h2 className="text-2xl font-semibold">Why we built it</h2>
             <p className="mt-4 text-sm leading-7 text-slate-400">
               Most important decisions start messy: a half-clear goal, a rough budget, a short timeline, and a lot of
-              assumptions. Decision Replay was built to make those decisions easier to explain, compare, and improve
-              before the real cost of a bad call shows up.
+              assumptions. Decision Replay was built to show where a plan is weak, explain how to improve it, and help
+              users move toward a more feasible version before the real cost of a bad call shows up.
             </p>
           </div>
           <div>
@@ -70,12 +70,12 @@ export default function AboutPage() {
 
         <div className="mt-14 rounded-2xl border border-white/10 bg-gradient-to-r from-green-400/[0.08] to-sky-400/[0.05] p-8 sm:flex sm:items-center sm:justify-between">
           <div>
-            <h2 className="text-2xl font-semibold">Start with the decision in front of you.</h2>
-            <p className="mt-2 text-sm text-slate-500">Bring the goal, constraints, and uncertainty. Decision Replay will help shape the next move.</p>
+            <h2 className="text-2xl font-semibold">Start with the plan you have now.</h2>
+            <p className="mt-2 text-sm text-slate-500">Bring the goal, constraints, and uncertainty. Decision Replay will help upgrade the next version.</p>
           </div>
           <Link href="/decisions/new">
             <Button className="mt-5 bg-green-400 text-black hover:bg-green-300 sm:mt-0">
-              Analyze a decision
+              Improve a plan
               <ArrowRight className="ml-2 h-4 w-4" />
             </Button>
           </Link>

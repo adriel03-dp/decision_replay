@@ -158,7 +158,7 @@ export default function DecisionAnalyticsPage() {
                 <div className="grid h-[104px] w-[104px] place-items-center rounded-full bg-[#0b0f13] text-center">
                   <div>
                     <div className="text-4xl font-semibold">{Math.round(decision.feasibilityScore)}</div>
-                    <div className="text-[9px] uppercase tracking-[0.2em] text-slate-600">Feasibility</div>
+                    <div className="text-[9px] uppercase tracking-[0.2em] text-slate-600">Plan grade</div>
                   </div>
                 </div>
               </div>
@@ -168,9 +168,9 @@ export default function DecisionAnalyticsPage() {
 
         <section className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
-            [Scale, "Decision factors", String(decision.factorBreakdown.length), "Signals shaping this outcome"],
+            [Scale, "Plan factors", String(decision.factorBreakdown.length), "Signals shaping the grade"],
             [ShieldAlert, "Active risks", String(decision.risks.length), `${decision.riskLevel} aggregate level`],
-            [FileQuestion, "Missing evidence", String(decision.missingFields.length), "Worth clarifying before commitment"],
+            [FileQuestion, "Improvement gaps", String(decision.missingFields.length), "Worth clarifying before commitment"],
             [History, "Audit events", String(decision.auditTrail.length), `Current version ${decision.version}`],
           ].map(([Icon, label, value, detail]) => {
             const IconComponent = Icon as typeof Scale
@@ -192,7 +192,7 @@ export default function DecisionAnalyticsPage() {
             <CardHeader className="border-b border-white/10">
               <CardTitle className="flex items-center gap-2 text-base">
                 <Gauge className="h-4 w-4 text-sky-300" />
-                Feasibility factor performance
+                Plan factor performance
               </CardTitle>
             </CardHeader>
             <CardContent className="p-5">
@@ -203,7 +203,7 @@ export default function DecisionAnalyticsPage() {
                   <YAxis type="category" dataKey="name" width={138} tick={{ fill: "#94a3b8", fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip
                     contentStyle={{ background: "#0f1720", border: "1px solid rgba(255,255,255,.1)", borderRadius: 8 }}
-                    formatter={(value) => [`${Number(value).toFixed(1)}/100`, "Factor score"]}
+                    formatter={(value) => [`${Number(value).toFixed(1)}/100`, "Factor grade"]}
                   />
                   <Bar dataKey="score" fill="#38bdf8" radius={[0, 5, 5, 0]} barSize={16} />
                 </BarChart>
@@ -240,7 +240,7 @@ export default function DecisionAnalyticsPage() {
 
         <Card className="mt-5 border-white/10 bg-slate-950/75">
           <CardHeader className="border-b border-white/10">
-            <CardTitle className="text-base">Insight summary</CardTitle>
+            <CardTitle className="text-base">What is holding the plan back</CardTitle>
           </CardHeader>
           <CardContent className="p-0">
             <div className="divide-y divide-white/10">
@@ -286,7 +286,7 @@ export default function DecisionAnalyticsPage() {
           </Card>
 
           <Card className="border-white/10 bg-slate-950/75">
-            <CardHeader className="border-b border-white/10"><CardTitle className="text-base">Assumptions and actions</CardTitle></CardHeader>
+            <CardHeader className="border-b border-white/10"><CardTitle className="text-base">Improvement advice</CardTitle></CardHeader>
             <CardContent className="space-y-5 p-5">
               <div>
                 <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600">Assumptions</h2>
@@ -296,7 +296,7 @@ export default function DecisionAnalyticsPage() {
                 </ul>
               </div>
               <div className="border-t border-white/10 pt-5">
-                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600">Recommendations</h2>
+                <h2 className="text-xs font-semibold uppercase tracking-wider text-slate-600">What to improve next</h2>
                 <ul className="mt-3 space-y-2">
                   {decision.recommendations.map((item) => <li key={item} className="text-xs leading-5 text-slate-400">- {item}</li>)}
                 </ul>
@@ -309,13 +309,13 @@ export default function DecisionAnalyticsPage() {
           <CardHeader className="border-b border-white/10">
             <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <CardTitle className="flex items-center gap-2 text-base"><Route className="h-4 w-4 text-green-300" />Bounded action plan</CardTitle>
-                <p className="mt-1 text-xs text-slate-600">Built from the decision context, constraints, risk signals, and desired outcome.</p>
+                <CardTitle className="flex items-center gap-2 text-base"><Route className="h-4 w-4 text-green-300" />Upgraded action plan</CardTitle>
+                <p className="mt-1 text-xs text-slate-600">Built around the decision context, constraints, risk signals, and the strongest next version of the plan.</p>
               </div>
               <div className="flex flex-wrap gap-2">
                 <Button variant="outline" size="sm" onClick={regeneratePlan} disabled={regenerating}>
                   {regenerating ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-                  Regenerate
+                  Improve again
                 </Button>
                 <Button variant="outline" size="sm" onClick={() => exportPlan("pdf")} disabled={!decision.plan || exporting !== null}>
                   <Download className="mr-2 h-4 w-4" />PDF
