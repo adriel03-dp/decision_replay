@@ -68,13 +68,13 @@ public sealed class HealthController : ControllerBase
                 languageInterface = new
                 {
                     status = _languageService.IsConfigured ? "configured" : "fallback",
-                    provider = "Groq",
-                    scoringAuthority = false
+                    capability = "AI decision guidance",
+                    planGradingAuthority = false
                 },
                 decisionEngine = new
                 {
                     status = "healthy",
-                    scoring = "deterministic",
+                    grading = "structured plan assessment",
                     rulesVersion = "1.0"
                 }
             }
