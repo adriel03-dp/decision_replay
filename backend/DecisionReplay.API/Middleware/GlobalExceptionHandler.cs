@@ -61,7 +61,7 @@ public class GlobalExceptionHandler : IExceptionHandler
         httpContext.Response.ContentType = "application/json";
 
         await httpContext.Response.WriteAsync(
-            JsonSerializer.Serialize(errorResponse),
+            JsonSerializer.Serialize(errorResponse, new JsonSerializerOptions(JsonSerializerDefaults.Web)),
             cancellationToken
         );
 

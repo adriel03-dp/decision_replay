@@ -77,6 +77,8 @@ public sealed class GroqLanguageService : IAiLanguageService
             - Do not assign risk levels or factor scores.
             - Do not recommend a final decision.
             - Do not invent budgets, dates, resources, evidence, or outcomes.
+            - Level fields must be normalized to one of: none, low, medium, high, very high, ready, partial, unknown.
+            - If a level is ambiguous or unstated, use unknown or omit the optional field.
             - Omit unsupported values from fields and list them in missingFields.
             - Lists must be represented as comma-separated strings in fields.
             """;
