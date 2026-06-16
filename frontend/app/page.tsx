@@ -19,11 +19,11 @@ export default function HomePage() {
                 </span>
               </div>
               <h1 className="text-5xl md:text-6xl font-bold leading-tight">
-                Make Better Decisions with <span className="gradient-text">Deterministic Evidence</span>
+                Make Better Decisions with <span className="gradient-text">AI-Powered Clarity</span>
               </h1>
               <p className="text-lg text-foreground/70 max-w-xl">
-                Submit any decision in natural language—project plans, resource allocation, timelines, budgets—and get 
-                instant constraint-based feasibility analysis. See what could go wrong before you commit. Replay decisions 
+                Submit any decision in natural language, from project plans to resource allocation, timelines, and budgets,
+                and get an intelligent view of feasibility, risk, and next steps. See what could go wrong before you commit. Replay decisions
                 with updated constraints to explore "what-if" scenarios.
               </p>
             </div>
@@ -50,11 +50,11 @@ export default function HomePage() {
             <div className="grid grid-cols-2 gap-4 pt-4">
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium">Deterministic Scoring</span>
+                <span className="text-sm font-medium">Decision Clarity</span>
               </div>
               <div className="flex items-center gap-3">
                 <TrendingUp className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium">Decision Replay Engine</span>
+                <span className="text-sm font-medium">Scenario Replay</span>
               </div>
               <div className="flex items-center gap-3">
                 <Shield className="w-5 h-5 text-green-600 dark:text-green-400" />
@@ -62,7 +62,7 @@ export default function HomePage() {
               </div>
               <div className="flex items-center gap-3">
                 <CheckCircle2 className="w-5 h-5 text-green-600 dark:text-green-400" />
-                <span className="text-sm font-medium">Domain Rule Templates</span>
+                <span className="text-sm font-medium">Actionable Plans</span>
               </div>
             </div>
           </div>
@@ -87,9 +87,9 @@ export default function HomePage() {
       {/* Features Section */}
       <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-20">
         <div className="text-center mb-16 slide-up">
-          <h2 className="text-4xl font-bold mb-4">How Decision Replay Works</h2>
+          <h2 className="text-4xl font-bold mb-4">What Decision Replay Helps You Do</h2>
           <p className="text-foreground/70 text-lg max-w-2xl mx-auto">
-            Backend-owned decision intelligence that helps you understand feasibility, identify risks, and explore alternatives
+            AI-integrated decision intelligence that helps you understand feasibility, identify risks, and explore better alternatives.
           </p>
         </div>
 
@@ -99,13 +99,13 @@ export default function HomePage() {
               icon: CheckCircle2,
               title: "Natural Language Input",
               description:
-                "Describe your decision in plain English—no forms, no rigid fields. Just tell us what you're trying to decide.",
+                "Describe your decision in plain English. No rigid forms. Just explain what you are trying to decide.",
             },
             {
               icon: TrendingUp,
-              title: "Constraint Feasibility Engine",
+              title: "Feasibility Snapshot",
               description:
-                "Versioned backend rules calculate weighted feasibility, risk, missing evidence, and practical recommendations.",
+                "Understand how budget, time, resources, scope, and uncertainty shape the strength of your plan.",
             },
             {
               icon: Shield,

@@ -80,7 +80,7 @@ export default function DecisionsPage() {
             </div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em]">Decision Replay</h1>
             <p className="mt-2 text-sm text-slate-500">
-              Deterministic scores, explicit assumptions, and a complete audit trail.
+              Clear decision profiles, visible assumptions, and every version in one place.
             </p>
           </div>
           <Link href="/decisions/new">

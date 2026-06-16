@@ -45,7 +45,7 @@ export default function AnalyticsPage() {
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.2em] text-sky-300">Portfolio view</div>
             <h1 className="mt-3 text-4xl font-semibold tracking-[-0.04em]">Decision analytics</h1>
-            <p className="mt-2 text-sm text-slate-500">Aggregated from stored deterministic engine outputs.</p>
+            <p className="mt-2 text-sm text-slate-500">A portfolio view of your analyzed decisions and open risks.</p>
           </div>
           <Link href="/decisions/new"><Button className="bg-green-400 text-black hover:bg-green-300"><Plus className="mr-2 h-4 w-4" />New decision</Button></Link>
         </header>

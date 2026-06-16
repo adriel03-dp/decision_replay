@@ -9,10 +9,10 @@ import {
   ArrowRight,
   Braces,
   CheckCircle2,
+  Compass,
   FileText,
   Gauge,
   Loader2,
-  LockKeyhole,
   Route,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -25,10 +25,10 @@ const EXAMPLE =
   "I want to launch a subscription meal-planning app for busy professionals. My budget is $35,000, the timeline is 6 months, and I have a team of 3. The first release needs onboarding, weekly plans, payments, and basic analytics. I need to validate demand before committing the full budget."
 
 const PIPELINE = [
-  ["Extract", "Groq converts your text into typed fields."],
-  ["Validate", "The backend checks constraints and missing evidence."],
-  ["Score", "Versioned rules calculate feasibility and risk."],
-  ["Plan", "A bounded roadmap is built from the structured result."],
+  ["Describe", "Share the decision, constraints, and uncertainty in your own words."],
+  ["Clarify", "Decision Replay highlights what is known, missing, and assumed."],
+  ["Evaluate", "The system turns the situation into a practical decision profile."],
+  ["Act", "You receive a plan you can compare, revisit, and improve."],
 ]
 
 export default function NewDecisionPage() {
@@ -84,16 +84,15 @@ export default function NewDecisionPage() {
         <div className="mt-8 grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
           <section>
             <Badge className="border-green-400/20 bg-green-400/10 text-green-300">
-              <LockKeyhole className="mr-1 h-3 w-3" />
-              Rules are the authority
+              <Compass className="mr-1 h-3 w-3" />
+              Built for confident commitments
             </Badge>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
               Turn a messy decision into an auditable plan.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
-              Include the goal, budget, timeline, resources, scope, and constraints you know.
-              Missing details are reported, never silently invented. Groq handles language only;
-              deterministic backend rules own every score and risk level.
+              Include the goal, budget, timeline, resources, scope, and constraints you know. Decision Replay helps
+              you understand the opportunity, expose weak spots, and move forward with a clearer action plan.
             </p>
 
             <Card className="mt-8 overflow-hidden border-white/10 bg-slate-950/80 shadow-2xl shadow-black/30">
@@ -148,7 +147,7 @@ export default function NewDecisionPage() {
             <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <Route className="h-4 w-4 text-sky-300" />
-                What happens next
+                What you get
               </div>
               <div className="mt-6 space-y-0">
                 {PIPELINE.map(([title, description], index) => (

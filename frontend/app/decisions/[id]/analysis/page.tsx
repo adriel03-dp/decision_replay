@@ -87,8 +87,8 @@ export default function ReplayPage() {
           </Badge>
           <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em]">Change the scenario, preserve the evidence.</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-            Edit budget, timeline, resources, scope, or assumptions in the narrative. The backend extracts a new
-            structured version, reruns the same deterministic rules, rebuilds the bounded plan, and records the delta.
+            Edit budget, timeline, resources, scope, or assumptions in the narrative. Decision Replay compares the new
+            scenario with the previous one so you can see what changed and why it matters.
           </p>
         </header>
 
@@ -121,7 +121,7 @@ export default function ReplayPage() {
                 <CardContent className="p-8 text-center">
                   <GitCompareArrows className="mx-auto h-9 w-9 text-slate-700" />
                   <h2 className="mt-4 font-semibold">No replay yet</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">Change at least one constraint and run the replay to see authoritative deltas.</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Change at least one constraint and run the replay to see clear differences.</p>
                 </CardContent>
               </Card>
             ) : (
