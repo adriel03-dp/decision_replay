@@ -8,8 +8,8 @@ import { ThemeProvider } from "@/components/theme-provider"
 import { Toaster } from "@/components/ui/toaster"
 
 export const metadata: Metadata = {
-  title: "Decision Replay - Constraint-Based Decision Engine",
-  description: "Auditable feasibility scoring, decision replay, risk analysis, and structured action plans",
+  title: "Decision Replay - AI Decision Intelligence",
+  description: "AI-integrated decision support that grades ideas, reveals flaws, and improves plans toward stronger outcomes",
   generator: "v0.app",
   icons: {
     icon: [

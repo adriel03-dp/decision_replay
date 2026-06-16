@@ -83,12 +83,12 @@ export default function ReplayPage() {
         <header className="mt-7 border-b border-white/10 pb-7">
           <Badge className="border-sky-400/20 bg-sky-400/10 text-sky-300">
             <GitCompareArrows className="mr-1 h-3 w-3" />
-            Constraint replay
+            Plan upgrade replay
           </Badge>
-          <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em]">Change the scenario, preserve the evidence.</h1>
+          <h1 className="mt-4 text-4xl font-semibold tracking-[-0.04em]">Change the plan, improve the outcome.</h1>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-500">
-            Edit budget, timeline, resources, scope, or assumptions in the narrative. The backend extracts a new
-            structured version, reruns the same deterministic rules, rebuilds the bounded plan, and records the delta.
+            Edit budget, timeline, resources, scope, assumptions, or strategy. Decision Replay compares the new version
+            with the previous one so you can see whether the plan became stronger and what still needs attention.
           </p>
         </header>
 
@@ -121,7 +121,7 @@ export default function ReplayPage() {
                 <CardContent className="p-8 text-center">
                   <GitCompareArrows className="mx-auto h-9 w-9 text-slate-700" />
                   <h2 className="mt-4 font-semibold">No replay yet</h2>
-                  <p className="mt-2 text-sm leading-6 text-slate-600">Change at least one constraint and run the replay to see authoritative deltas.</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-600">Change at least one part of the plan and run the replay to see what improved.</p>
                 </CardContent>
               </Card>
             ) : (
@@ -131,7 +131,7 @@ export default function ReplayPage() {
                   <CardContent className="p-6">
                     <div className="flex items-center justify-between">
                       <div>
-                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Feasibility delta</div>
+                        <div className="text-[10px] font-semibold uppercase tracking-[0.18em] text-slate-600">Plan grade delta</div>
                         <div className={`mt-2 flex items-center gap-2 text-4xl font-semibold ${result.comparison.scoreDelta >= 0 ? "text-green-300" : "text-red-300"}`}>
                           {result.comparison.scoreDelta >= 0 ? <TrendingUp className="h-7 w-7" /> : <TrendingDown className="h-7 w-7" />}
                           {result.comparison.scoreDelta >= 0 ? "+" : ""}{result.comparison.scoreDelta.toFixed(1)}
@@ -139,7 +139,7 @@ export default function ReplayPage() {
                       </div>
                       <div className="text-right">
                         <div className="text-2xl font-semibold">{Math.round(result.decision.feasibilityScore)}</div>
-                        <div className="text-[10px] uppercase tracking-wider text-slate-600">New score</div>
+                        <div className="text-[10px] uppercase tracking-wider text-slate-600">New grade</div>
                       </div>
                     </div>
                     <p className="mt-5 text-sm leading-6 text-slate-400">{result.comparison.mainReason}</p>

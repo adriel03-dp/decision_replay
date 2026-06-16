@@ -10,6 +10,13 @@ namespace DecisionReplay.Infrastructure.Services;
 
 public sealed class GroqLanguageService : IAiLanguageService
 {
+    private const string AccuracyInstruction = """
+        Optimize for maximum decision accuracy from the supplied information.
+        Treat missing or ambiguous inputs as explicit uncertainty, not permission to invent facts.
+        Use director-level judgment: concise, strategic, commercially aware, and execution-focused.
+        The output should help the user improve the plan toward the strongest feasible version.
+        """;
+
     private readonly HttpClient _httpClient;
     private readonly ILogger<GroqLanguageService> _logger;
     private readonly string? _apiKey;
@@ -53,6 +60,8 @@ public sealed class GroqLanguageService : IAiLanguageService
         });
 
         var prompt = $$"""
+            {{AccuracyInstruction}}
+
             Extract structured fields from the user's decision.
 
             Supported templates:
@@ -77,6 +86,12 @@ public sealed class GroqLanguageService : IAiLanguageService
             - Do not assign risk levels or factor scores.
             - Do not recommend a final decision.
             - Do not invent budgets, dates, resources, evidence, or outcomes.
+            - Preserve exact user-provided numbers, dates, scope items, and constraints where available.
+            - Choose the domain that best matches the user's business or project intent.
+            - The title must sound like a concise board-ready plan title, not a generic label.
+            - The goal must capture the intended outcome and what success would mean.
+            - Level fields must be normalized to one of: none, low, medium, high, very high, ready, partial, unknown.
+            - If a level is ambiguous or unstated, use unknown or omit the optional field.
             - Omit unsupported values from fields and list them in missingFields.
             - Lists must be represented as comma-separated strings in fields.
             """;
@@ -84,7 +99,7 @@ public sealed class GroqLanguageService : IAiLanguageService
         try
         {
             var content = await SendAsync(
-                "You are a strict information extraction interface. You never score decisions.",
+                "You are a director-level decision intake analyst. Extract only what the user supplied, with maximum fidelity.",
                 prompt,
                 jsonMode: true,
                 cancellationToken);
@@ -136,26 +151,34 @@ public sealed class GroqLanguageService : IAiLanguageService
                 confidence = factor.Confidence.ToString()
             }),
             risks = assessment.Risks,
-            backendRecommendations = assessment.Recommendations
+            improvementAdvice = assessment.Recommendations
         };
 
         var prompt = $$"""
-            Explain this backend-calculated decision result in clear language:
+            {{AccuracyInstruction}}
+
+            Write a director-level plan improvement brief from this immutable decision result:
             {{JsonSerializer.Serialize(immutableResult)}}
 
-            Rules:
+            Required structure:
+            1. Start with the current plan grade and what it means in one direct sentence.
+            2. Explain the top weaknesses holding the plan back.
+            3. Translate the supplied improvement advice into specific next moves.
+            4. End with what would most improve feasibility in the next version.
+
+            Accuracy rules:
             - Preserve every numeric score, weight, risk level, and recommendation exactly.
-            - Explain why the weakest factors constrain the result.
+            - Explain why the weakest factors constrain the plan.
             - Clearly label assumptions and missing evidence.
-            - Do not add scores, risks, financial claims, or recommendations.
-            - Do not state that success is guaranteed.
-            - Use 2 to 4 concise paragraphs.
+            - Do not add new scores, new risks, unsupported financial claims, or invented facts.
+            - Do not guarantee success or claim the plan is 100% certain.
+            - Use 3 to 5 concise paragraphs with practical, executive wording.
             """;
 
         try
         {
             return await SendAsync(
-                "You explain immutable backend results. You cannot alter calculations.",
+                "You are a director-level decision advisor. Improve user understanding without changing supplied calculations.",
                 prompt,
                 jsonMode: false,
                 cancellationToken);
@@ -199,7 +222,9 @@ public sealed class GroqLanguageService : IAiLanguageService
         };
 
         var prompt = $$"""
-            Improve wording for the existing backend-created plan tasks:
+            {{AccuracyInstruction}}
+
+            Upgrade the wording for this existing action plan into a director-level execution roadmap:
             {{JsonSerializer.Serialize(immutablePlan)}}
 
             Return JSON only:
@@ -218,13 +243,15 @@ public sealed class GroqLanguageService : IAiLanguageService
             - Do not create, remove, reorder, or rename tasks or phases.
             - Do not change dates, weeks, effort, dependencies, scores, or success criteria.
             - Do not invent unsupported financial or market claims.
-            - Keep each field below 300 characters.
+            - Each description must state the exact action, intended output, and what a strong version looks like.
+            - Each riskMitigation must state the flaw it addresses and the practical control to reduce it.
+            - Keep each field below 450 characters.
             """;
 
         try
         {
             var content = await SendAsync(
-                "You improve task wording inside immutable backend plan constraints.",
+                "You are a director-level execution planning advisor. Strengthen task wording without changing plan structure.",
                 prompt,
                 jsonMode: true,
                 cancellationToken);
@@ -245,15 +272,18 @@ public sealed class GroqLanguageService : IAiLanguageService
         if (!IsConfigured) return string.Empty;
 
         var prompt = $$"""
-            Summarize this immutable backend replay comparison in two sentences:
+            {{AccuracyInstruction}}
+
+            Summarize this immutable plan replay comparison in two director-level sentences:
             {{JsonSerializer.Serialize(comparison)}}
 
-            Preserve all values. Do not add changes, scores, risks, or recommendations.
+            Preserve all values. Explain whether the revised plan became stronger or weaker and what most likely drove the change.
+            Do not add changes, scores, risks, recommendations, or unsupported claims.
             """;
         try
         {
             return await SendAsync(
-                "You summarize immutable decision replay differences.",
+                "You are a director-level plan improvement analyst. Summarize replay differences without changing the data.",
                 prompt,
                 jsonMode: false,
                 cancellationToken);

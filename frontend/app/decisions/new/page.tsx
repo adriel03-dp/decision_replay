@@ -9,10 +9,10 @@ import {
   ArrowRight,
   Braces,
   CheckCircle2,
+  Compass,
   FileText,
   Gauge,
   Loader2,
-  LockKeyhole,
   Route,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -25,10 +25,10 @@ const EXAMPLE =
   "I want to launch a subscription meal-planning app for busy professionals. My budget is $35,000, the timeline is 6 months, and I have a team of 3. The first release needs onboarding, weekly plans, payments, and basic analytics. I need to validate demand before committing the full budget."
 
 const PIPELINE = [
-  ["Extract", "Groq converts your text into typed fields."],
-  ["Validate", "The backend checks constraints and missing evidence."],
-  ["Score", "Versioned rules calculate feasibility and risk."],
-  ["Plan", "A bounded roadmap is built from the structured result."],
+  ["Submit", "Share the current version of your idea, even if it is still rough."],
+  ["Grade", "Decision Replay measures feasibility and highlights what is holding it back."],
+  ["Improve", "You get specific advice on what to change, add, reduce, or validate."],
+  ["Execute", "The upgraded roadmap shows what to do next to make the plan stronger."],
 ]
 
 export default function NewDecisionPage() {
@@ -49,8 +49,8 @@ export default function NewDecisionPage() {
     try {
       const result = await decisionApi.analyze(input.trim())
       toast({
-        title: "Decision analyzed",
-        description: `Version ${result.version} scored ${Math.round(result.feasibilityScore)}/100.`,
+        title: "Plan graded",
+        description: `Version ${result.version} received a ${Math.round(result.feasibilityScore)}/100 plan grade.`,
       })
       router.push(`/decisions/${result.decisionId}/analytics`)
     } catch (requestError) {
@@ -84,16 +84,16 @@ export default function NewDecisionPage() {
         <div className="mt-8 grid gap-10 lg:grid-cols-[1.1fr_0.9fr]">
           <section>
             <Badge className="border-green-400/20 bg-green-400/10 text-green-300">
-              <LockKeyhole className="mr-1 h-3 w-3" />
-              Rules are the authority
+              <Compass className="mr-1 h-3 w-3" />
+              Built to improve your plan
             </Badge>
             <h1 className="mt-5 max-w-3xl text-4xl font-semibold tracking-[-0.045em] sm:text-5xl">
-              Turn a messy decision into an auditable plan.
+              Turn a basic idea into a stronger execution plan.
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
-              Include the goal, budget, timeline, resources, scope, and constraints you know.
-              Missing details are reported, never silently invented. Groq handles language only;
-              deterministic backend rules own every score and risk level.
+              Include the goal, budget, timeline, resources, scope, and constraints you know. Decision Replay grades
+              the idea, exposes the flaws, and gives you the exact improvement advice needed to move toward a more
+              feasible outcome.
             </p>
 
             <Card className="mt-8 overflow-hidden border-white/10 bg-slate-950/80 shadow-2xl shadow-black/30">
@@ -110,7 +110,7 @@ export default function NewDecisionPage() {
                   value={input}
                   maxLength={20000}
                   onChange={(event) => setInput(event.target.value)}
-                  placeholder="What are you deciding, and what constraints make it difficult?"
+                  placeholder="Describe your idea, current plan, constraints, and what you want to make more feasible."
                   className="min-h-64 w-full resize-y rounded-xl border border-white/10 bg-black/25 p-4 text-sm leading-7 text-slate-200 outline-none transition placeholder:text-slate-700 focus:border-green-400/50 focus:ring-2 focus:ring-green-400/10"
                 />
                 {error && (
@@ -136,7 +136,7 @@ export default function NewDecisionPage() {
                     ) : (
                       <Gauge className="mr-2 h-4 w-4" />
                     )}
-                    Analyze and build plan
+                    Grade and improve plan
                     {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
                   </Button>
                 </div>
@@ -148,7 +148,7 @@ export default function NewDecisionPage() {
             <div className="rounded-2xl border border-white/10 bg-white/[0.025] p-6">
               <div className="flex items-center gap-2 text-sm font-semibold">
                 <Route className="h-4 w-4 text-sky-300" />
-                What happens next
+                What you get
               </div>
               <div className="mt-6 space-y-0">
                 {PIPELINE.map(([title, description], index) => (

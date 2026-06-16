@@ -26,6 +26,13 @@ public sealed class DecisionValidationService
 
             if (string.IsNullOrWhiteSpace(value)) continue;
 
+            if (field.Type == DecisionFieldType.Level && !IsRecognizedLevel(value))
+            {
+                result.Warnings.Add(
+                    $"Field '{field.Name}' used a non-standard level value and will be scored conservatively.");
+                continue;
+            }
+
             if (!IsValidType(value, field.Type))
                 result.Errors.Add($"Field '{field.Name}' must be a valid {field.Type.ToString().ToLowerInvariant()} value.");
 
@@ -57,11 +64,31 @@ public sealed class DecisionValidationService
             DecisionFieldType.List =>
                 value.Split(new[] { ',', ';', '\n' }, StringSplitOptions.RemoveEmptyEntries).Length > 0,
             DecisionFieldType.Level =>
-                TryNumber(value, out _) ||
-                new[] { "none", "low", "medium", "high", "very high", "ready", "partial", "unknown" }
-                    .Contains(value.Trim(), StringComparer.OrdinalIgnoreCase),
+                IsRecognizedLevel(value),
             _ => !string.IsNullOrWhiteSpace(value)
         };
+
+    private static bool IsRecognizedLevel(string value)
+    {
+        if (TryNumber(value, out _)) return true;
+
+        var normalized = value.Trim().ToLowerInvariant();
+        return normalized.Contains("very high") ||
+            normalized.Contains("ready") ||
+            normalized.Contains("strong") ||
+            normalized.Contains("high") ||
+            normalized.Contains("good") ||
+            normalized.Contains("medium") ||
+            normalized.Contains("partial") ||
+            normalized.Contains("moderate") ||
+            normalized.Contains("low") ||
+            normalized.Contains("weak") ||
+            normalized.Contains("none") ||
+            normalized.Contains("unknown") ||
+            normalized.Contains("unclear") ||
+            normalized.Contains("unvalidated") ||
+            normalized.Contains("not validated");
+    }
 
     internal static bool TryNumber(string? value, out double number)
     {
