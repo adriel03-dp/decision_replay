@@ -65,12 +65,12 @@ public sealed class DecisionEngineService
                 AuditActionType.DecisionCreated,
                 1,
                 userId,
-                "Decision record created from natural-language input."),
+                "Plan submitted for improvement analysis."),
             _audit.Create(
                 AuditActionType.InputParsed,
                 1,
                 "system",
-                $"Input extracted into the {version.StructuredData.Domain} template.",
+                $"Plan context was organized for the {version.StructuredData.Domain} category.",
                 new Dictionary<string, string>
                 {
                     ["fieldCount"] = version.StructuredData.Fields.Count.ToString(),
@@ -80,7 +80,7 @@ public sealed class DecisionEngineService
                 AuditActionType.FeasibilityCalculated,
                 1,
                 "system",
-                "Deterministic feasibility rules were applied.",
+                "The plan was graded for feasibility and improvement potential.",
                 new Dictionary<string, string>
                 {
                     ["score"] = version.Feasibility.FeasibilityScore.ToString("0.0"),
@@ -91,7 +91,7 @@ public sealed class DecisionEngineService
                 AuditActionType.PlanGenerated,
                 1,
                 "system",
-                "A constraint-bound action plan was generated.",
+                "An upgraded action plan was generated.",
                 new Dictionary<string, string>
                 {
                     ["planId"] = version.Plan?.PlanId.ToString() ?? string.Empty,
@@ -130,7 +130,7 @@ public sealed class DecisionEngineService
             AuditActionType.ReplayCreated,
             next.Version,
             userId,
-            "A new decision version was calculated and compared.",
+            "A revised plan version was graded and compared.",
             new Dictionary<string, string>
             {
                 ["previousVersion"] = previous.Version.ToString(),
@@ -165,7 +165,7 @@ public sealed class DecisionEngineService
             AuditActionType.PlanGenerated,
             version.Version,
             userId,
-            "The current version action plan was regenerated.",
+            "The current version action plan was improved again.",
             new Dictionary<string, string> { ["planId"] = version.Plan.PlanId.ToString() }));
         await _repository.UpdateAsync(decision);
         return version.Plan;

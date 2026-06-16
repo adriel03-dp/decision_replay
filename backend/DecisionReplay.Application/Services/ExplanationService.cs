@@ -29,9 +29,9 @@ public sealed class ExplanationService
     private static string BuildDeterministicExplanation(FeasibilityAssessment assessment)
     {
         var weakest = assessment.FactorBreakdown.OrderBy(factor => factor.Score).Take(2).ToList();
-        return $"The backend calculated a feasibility score of {assessment.FeasibilityScore:0.#}/100 " +
-               $"with {assessment.RiskLevel} risk. The most constrained factors are " +
+        return $"Decision Replay graded this plan at {assessment.FeasibilityScore:0.#}/100 " +
+               $"with {assessment.RiskLevel} risk. The biggest improvement areas are " +
                $"{string.Join(" and ", weakest.Select(factor => factor.Factor.Replace('_', ' ')))}. " +
-               "The score is derived from domain rules and the supplied structured values.";
+               "Strengthening those areas will move the next version closer to a stronger, more feasible plan.";
     }
 }
