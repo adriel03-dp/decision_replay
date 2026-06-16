@@ -34,11 +34,17 @@ public sealed class DecisionValidationService
             }
 
             if (!IsValidType(value, field.Type))
-                result.Errors.Add($"Field '{field.Name}' must be a valid {field.Type.ToString().ToLowerInvariant()} value.");
+            {
+                HandleInvalidFieldValue(result, field);
+                continue;
+            }
 
             if (field.ValidationPattern != null &&
                 !System.Text.RegularExpressions.Regex.IsMatch(value, field.ValidationPattern))
-                result.Errors.Add($"Field '{field.Name}' does not match the required format.");
+            {
+                HandleInvalidFieldValue(result, field);
+                continue;
+            }
         }
 
         result.MissingFields = result.MissingFields
@@ -50,6 +56,17 @@ public sealed class DecisionValidationService
             result.Warnings.Add("Missing fields are scored conservatively using documented assumptions.");
 
         return result;
+    }
+
+    private static void HandleInvalidFieldValue(
+        DecisionValidationResult result,
+        DecisionFieldDefinition field)
+    {
+        if (field.Required)
+            result.MissingFields.Add(field.Name);
+
+        result.Warnings.Add(
+            $"Field '{field.Name}' could not be confidently interpreted and will be treated as an improvement gap.");
     }
 
     private static bool IsValidType(string value, DecisionFieldType type) =>
