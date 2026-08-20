@@ -17,6 +17,7 @@ public interface IAiProviderResolver
     int MaxRetries { get; }
     TimeSpan RequestTimeout { get; }
     bool DeterministicFallback { get; }
+    bool InteractiveWording { get; }
     AiParameters Parameters { get; }
 }
 

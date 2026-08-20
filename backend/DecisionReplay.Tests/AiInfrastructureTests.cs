@@ -27,7 +27,7 @@ public sealed class AiInfrastructureTests
     [Fact]
     public void CloudSelectionWithoutCredentialsFailsClearly()
     {
-        var config = new AiConfiguration { Provider = "groq" };
+        var config = new AiConfiguration { Provider = "groq", GroqModel = "test-cloud" };
         Assert.Contains("GROQ_API_KEY", Assert.Throws<InvalidOperationException>(config.ValidateSelectedProviders).Message);
     }
 
@@ -193,7 +193,7 @@ public sealed class AiInfrastructureTests
     {
         var groq = new AiTestProvider("groq", (_, _) => Task.FromResult(new AiGenerationResponse("""{"domain":"project_planning","title":"Groq extraction","goal":"Build portal","fields":{},"assumptions":[],"missingFields":[]}""")));
         var ollama = new AiTestProvider("ollama", (_, _) => Task.FromResult(new AiGenerationResponse("""{"text":"Local wording"}""")));
-        var resolver = new AiProviderResolver(new[] { groq, ollama }, AiTestHarness.Configuration("hybrid"));
+        var resolver = new AiProviderResolver(new[] { groq, ollama }, AiTestHarness.Configuration("hybrid", interactiveWording: true));
         var language = new AiLanguageService(new(resolver, new EmbeddedPromptCatalog(), new InMemoryAiRunRepository(), new(),
             NullLogger<AiWorkflowService>.Instance), resolver, NullLogger<AiLanguageService>.Instance);
         Assert.Equal("Groq extraction", (await language.ExtractDecisionAsync("Build a portal", new DomainTemplateService().GetAll())).Title);
@@ -212,6 +212,45 @@ public sealed class AiInfrastructureTests
         Assert.Equal("failed", (await harness.Runs.GetExecutionsAsync("test")).Single().Status);
     }
 
+    [Fact]
+    public async Task DefaultInteractiveWorkflowDoesNotWaitForLocalWording()
+    {
+        var groq = new AiTestProvider("groq", (_, _) => Task.FromResult(new AiGenerationResponse("""{"domain":"project_planning","title":"Groq extraction","goal":"Build portal","fields":{},"assumptions":[],"missingFields":[]}""")));
+        var ollama = new AiTestProvider("ollama", (_, _) => throw new InvalidOperationException("Interactive requests must not wait for local inference."));
+        var resolver = new AiProviderResolver(new[] { groq, ollama }, AiTestHarness.Configuration("hybrid"));
+        var runs = new InMemoryAiRunRepository();
+        var language = new AiLanguageService(new(resolver, new EmbeddedPromptCatalog(), runs, new(), NullLogger<AiWorkflowService>.Instance),
+            resolver, NullLogger<AiLanguageService>.Instance);
+        Assert.Equal("Groq extraction", (await language.ExtractDecisionAsync("Build portal", new DomainTemplateService().GetAll())).Title);
+        Assert.Empty(await language.ExplainResultAsync(new(), new()));
+        Assert.Empty(await language.SummarizeReplayAsync(new()));
+        Assert.Empty(await language.EnhancePlanTasksAsync(new(), new(), new()));
+        Assert.Single(groq.Requests);
+        Assert.Empty(ollama.Requests);
+    }
+    [Theory]
+    [InlineData("6", "6")]
+    [InlineData("\"6\"", "6")]
+    public async Task ExtractionNormalizesNumericScalarsBeforeBusinessUse(string value, string expected)
+    {
+        var body = "{\"domain\":\"project_planning\",\"title\":\"Typed extraction\",\"goal\":\"Build portal\",\"fields\":{\"timeline_months\":" + value + "},\"assumptions\":[],\"missingFields\":[]}";
+        var harness = new AiTestHarness(send: (_, _) => Task.FromResult(new AiGenerationResponse(body)));
+        var language = new AiLanguageService(harness.Workflow, harness.Resolver, NullLogger<AiLanguageService>.Instance);
+        var result = await language.ExtractDecisionAsync("Build portal", new DomainTemplateService().GetAll());
+        Assert.Equal(expected, result.Fields["timeline_months"]);
+        Assert.Equal("Typed extraction", result.Title);
+        Assert.Equal("succeeded", (await harness.Runs.GetExecutionsAsync("test")).Single().Status);
+    }
+
+    [Fact]
+    public async Task ExtractionRejectsNestedValuesRatherThanStringifyingThem()
+    {
+        var harness = new AiTestHarness(maxRetries: 0, send: (_, _) => Task.FromResult(new AiGenerationResponse("""{"domain":"project_planning","title":"Untrusted","goal":"Build portal","fields":{"timeline_months":{"value":6}},"assumptions":[],"missingFields":[]}""")));
+        var language = new AiLanguageService(harness.Workflow, harness.Resolver, NullLogger<AiLanguageService>.Instance);
+        var result = await language.ExtractDecisionAsync("Build portal", new DomainTemplateService().GetAll());
+        Assert.Contains(result.Assumptions, assumption => assumption.Contains("deterministic parser"));
+        Assert.Equal("schema_validation", (await harness.Runs.GetExecutionsAsync("test")).Single().ErrorCode);
+    }
     private static HttpResponseMessage Response(string body) => new(HttpStatusCode.OK) { Content = new StringContent(body, Encoding.UTF8, "application/json") };
     private sealed class TestHttpFactory(Func<HttpRequestMessage, CancellationToken, Task<HttpResponseMessage>> send) : IHttpClientFactory
     { public HttpClient CreateClient(string name) => new(new Handler(send)); }
@@ -247,8 +286,8 @@ internal sealed class AiTestHarness
     public Task<ValidatedAiResult<DecisionAiAnalysis>> Analyse(CancellationToken token = default) =>
         Workflow.GenerateAsync<DecisionAiAnalysis>("decision-analysis", "v1", ReplayContextService.T0Input(Context()),
             output => AiOutputValidation.Analysis(output, Context()), cancellationToken: token);
-    public static AiConfiguration Configuration(string provider = "ollama") => new()
-    { Provider = provider, OllamaBaseUrl = "http://ollama.test:11434", OllamaModel = "test:3b", GroqBaseUrl = "https://groq.test/v1", GroqModel = "test-cloud", GroqApiKey = "fake-test-key" };
+    public static AiConfiguration Configuration(string provider = "ollama", bool interactiveWording = false) => new()
+    { Provider = provider, InteractiveWording = interactiveWording, OllamaBaseUrl = "http://ollama.test:11434", OllamaModel = "test:3b", GroqBaseUrl = "https://groq.test/v1", GroqModel = "test-cloud", GroqApiKey = "fake-test-key" };
     public static DecisionContextSnapshot Context() => new()
     {
         DecisionAt = new DateTime(2025, 1, 1, 10, 0, 0, DateTimeKind.Utc), DecisionText = "Build a customer portal", ChosenAction = "Run a pilot",

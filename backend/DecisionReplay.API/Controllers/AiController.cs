@@ -19,7 +19,7 @@ public sealed class AiController(IAiRunRepository runs, IPromptCatalog prompts, 
     {
         extraction = providers.DefaultTarget("extraction"),
         analysis = providers.DefaultTarget("decision-analysis"),
-        providers.RequestTimeout.TotalSeconds, providers.MaxRetries,
+        providers.RequestTimeout.TotalSeconds, providers.MaxRetries, providers.InteractiveWording,
         prompts = prompts.List().Select(prompt => new { prompt.Operation, prompt.Version, prompt.Hash }),
         datasetVersions = new[] { "v1" }
     });

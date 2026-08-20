@@ -12,11 +12,12 @@ public sealed class AiConfiguration
     public string OllamaBaseUrl { get; init; } = "";
     public string OllamaModel { get; init; } = "";
     public string GroqBaseUrl { get; init; } = "https://api.groq.com/openai/v1";
-    public string GroqModel { get; init; } = "llama-3.3-70b-versatile";
+    public string GroqModel { get; init; } = "";
     public string? GroqApiKey { get; init; }
     public int MaxRetries { get; init; } = 1;
     public TimeSpan RequestTimeout { get; init; } = TimeSpan.FromSeconds(120);
     public bool DeterministicFallback { get; init; } = true;
+    public bool InteractiveWording { get; init; }
     public AiParameters Parameters { get; init; } = new();
     public AiTarget? Fallback { get; init; }
 
@@ -31,6 +32,9 @@ public sealed class AiConfiguration
                 throw new InvalidOperationException($"{name} must be between {min} and {max}.");
             return result;
         }
+        var wordingText = Read("AI_INTERACTIVE_WORDING") ?? "false";
+        if (!bool.TryParse(wordingText, out var interactiveWording))
+            throw new InvalidOperationException("AI_INTERACTIVE_WORDING must be true or false.");
         var failureMode = Read("AI_FAILURE_MODE") ?? "deterministic";
         if (failureMode is not ("deterministic" or "error"))
             throw new InvalidOperationException("AI_FAILURE_MODE must be deterministic or error.");
@@ -50,12 +54,13 @@ public sealed class AiConfiguration
             OllamaBaseUrl = Read("OLLAMA_BASE_URL") ?? "",
             OllamaModel = Read("OLLAMA_MODEL") ?? "",
             GroqBaseUrl = Read("GROQ_BASE_URL") ?? "https://api.groq.com/openai/v1",
-            GroqModel = Read("GROQ_MODEL") ?? "llama-3.3-70b-versatile",
+            GroqModel = Read("GROQ_MODEL") ?? "",
             GroqApiKey = Read("GROQ_API_KEY"),
             MaxRetries = Integer("AI_MAX_RETRIES", 1, 0, 3),
             RequestTimeout = TimeSpan.FromSeconds(Integer("AI_REQUEST_TIMEOUT_SECONDS",
                 Integer("OLLAMA_REQUEST_TIMEOUT_SECONDS", 120, 1, 3600), 1, 3600)),
             DeterministicFallback = failureMode == "deterministic",
+            InteractiveWording = interactiveWording,
             Parameters = new(temperature, Integer("AI_MAX_OUTPUT_TOKENS", 2048, 128, 8192)),
             Fallback = string.IsNullOrWhiteSpace(fallbackProvider) ? null : new(fallbackProvider!.ToLowerInvariant(), fallbackModel!)
         };
@@ -104,5 +109,6 @@ public sealed class AiProviderResolver(IEnumerable<IAiProvider> providers, AiCon
     public int MaxRetries => configuration.MaxRetries;
     public TimeSpan RequestTimeout => configuration.RequestTimeout;
     public bool DeterministicFallback => configuration.DeterministicFallback;
+    public bool InteractiveWording => configuration.InteractiveWording;
     public AiParameters Parameters => configuration.Parameters;
 }

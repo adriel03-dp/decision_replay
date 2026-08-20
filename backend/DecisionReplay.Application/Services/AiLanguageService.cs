@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 using DecisionReplay.Application.Interfaces;
@@ -17,7 +18,7 @@ public sealed class AiLanguageService(AiWorkflowService workflow, IAiProviderRes
     {
         try
         {
-            var result = await workflow.GenerateAsync<ExtractionOutput>("extraction", "v1", new
+            var result = await workflow.GenerateAsync<ExtractionOutput>("extraction", "v2", new
             {
                 templates = templates.Select(template => new
                 {
@@ -30,14 +31,14 @@ public sealed class AiLanguageService(AiWorkflowService workflow, IAiProviderRes
                 var template = templates.FirstOrDefault(template => template.Domain == output.Domain);
                 if (template == null || !AiOutputValidation.Text(output.Title, 200) || !AiOutputValidation.Text(output.Goal, 20000)
                     || output.Fields == null || output.Fields.Count > 100 || output.Fields.Any(pair =>
-                        !template.Fields.Any(field => field.Name == pair.Key) || !AiOutputValidation.Text(pair.Value, 20000))
+                        !template.Fields.Any(field => field.Name == pair.Key) || !AiOutputValidation.Text(FieldText(pair.Value), 20000))
                     || !AiOutputValidation.Strings(output.Assumptions) || !AiOutputValidation.Strings(output.MissingFields)
                     || output.MissingFields.Any(name => !template.Fields.Any(field => field.Name == name)))
                     return "Extraction contains invalid fields or an unsupported domain.";
                 return null;
             }, cancellationToken: cancellationToken);
             var parsed = result.Value;
-            return new() { Domain = parsed.Domain, Title = parsed.Title, Goal = parsed.Goal, Fields = parsed.Fields,
+            return new() { Domain = parsed.Domain, Title = parsed.Title, Goal = parsed.Goal, Fields = parsed.Fields.ToDictionary(pair => pair.Key, pair => FieldText(pair.Value)!, StringComparer.OrdinalIgnoreCase),
                 Assumptions = parsed.Assumptions, MissingFields = parsed.MissingFields };
         }
         catch (AiException ex) when (providers.DeterministicFallback)
@@ -55,6 +56,8 @@ public sealed class AiLanguageService(AiWorkflowService workflow, IAiProviderRes
 
     private async Task<string> TextAsync(string operation, object input, CancellationToken token)
     {
+        token.ThrowIfCancellationRequested();
+        if (!providers.InteractiveWording) return "";
         try
         {
             return (await workflow.GenerateAsync<TextOutput>(operation, "v1", input,
@@ -70,6 +73,8 @@ public sealed class AiLanguageService(AiWorkflowService workflow, IAiProviderRes
     public async Task<IReadOnlyList<PlanTaskEnhancement>> EnhancePlanTasksAsync(StructuredDecisionData decision,
         FeasibilityAssessment assessment, ActionPlan plan, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (!providers.InteractiveWording) return Array.Empty<PlanTaskEnhancement>();
         var tasks = plan.Phases.SelectMany(phase => phase.Tasks).ToList();
         try
         {
@@ -116,12 +121,20 @@ public sealed class AiLanguageService(AiWorkflowService workflow, IAiProviderRes
             Assumptions = new() { "AI extraction failed; a deterministic parser extracted only explicit values and the stated goal. See AI execution metadata." } };
     }
 
+    // Wire values may be strings or JSON numbers. Reject objects, arrays, booleans and null;
+    // normalize numeric scalars once before they reach the domain's string-valued fields.
+    private static string? FieldText(JsonElement value) => value.ValueKind switch
+    {
+        JsonValueKind.String => value.GetString(),
+        JsonValueKind.Number => value.GetRawText(),
+        _ => null
+    };
     private sealed class ExtractionOutput
     {
         [JsonRequired] public string Domain { get; set; } = "";
         [JsonRequired] public string Title { get; set; } = "";
         [JsonRequired] public string Goal { get; set; } = "";
-        [JsonRequired] public Dictionary<string, string> Fields { get; set; } = new();
+        [JsonRequired] public Dictionary<string, JsonElement> Fields { get; set; } = new();
         [JsonRequired] public List<string> Assumptions { get; set; } = new();
         [JsonRequired] public List<string> MissingFields { get; set; } = new();
     }
