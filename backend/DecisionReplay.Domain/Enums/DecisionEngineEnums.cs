@@ -39,5 +39,6 @@ public enum AuditActionType
     HistoricalContextRecorded,
     OutcomeRecorded,
     ScenarioCreated,
-    HistoricalAnalysisCompleted
+    HistoricalAnalysisCompleted,
+    ImprovementAccepted
 }
