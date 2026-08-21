@@ -31,7 +31,7 @@ export function Navbar() {
           </Link>
 
           {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center gap-8">
+          <div className="hidden xl:flex items-center gap-4">
             <Link href="/about" className="text-foreground/70 hover:text-foreground smooth-transition font-medium">
               About
             </Link>
@@ -61,7 +61,7 @@ export function Navbar() {
                 <>
                   <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-green-50 dark:bg-slate-800 border border-green-100 dark:border-slate-700">
                     <UserIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
-                    <span className="text-sm font-medium text-foreground">{user?.name}</span>
+                    <span className="max-w-32 truncate text-sm font-medium text-foreground">{user?.name}</span>
                   </div>
                   <Link href="/settings">
                     <Button variant="outline" className="smooth-transition bg-transparent hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:border-amber-700 dark:hover:text-amber-200">
@@ -89,9 +89,11 @@ export function Navbar() {
           </div>
 
           {/* Mobile Menu Button */}
-          <div className="md:hidden flex items-center gap-3">
+          <div className="xl:hidden flex items-center gap-3">
             <ThemeToggle />
             <button
+              aria-label={isOpen ? "Close navigation" : "Open navigation"}
+              aria-expanded={isOpen}
               onClick={() => setIsOpen(!isOpen)}
               className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg smooth-transition"
             >
@@ -102,7 +104,7 @@ export function Navbar() {
 
         {/* Mobile Menu */}
         {isOpen && (
-          <div className="md:hidden pb-4 animate-slide-down">
+          <div className="xl:hidden pb-4 animate-slide-down">
             <div className="flex flex-col gap-3">
               <Link href="/about">
                 <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:text-amber-200">
@@ -139,7 +141,7 @@ export function Navbar() {
                   <>
                     <div className="flex items-center gap-2 px-3 py-2 rounded-lg bg-green-50 dark:bg-slate-800 border border-green-100 dark:border-slate-700">
                       <UserIcon className="w-4 h-4 text-green-600 dark:text-green-400" />
-                      <span className="text-sm font-medium text-foreground">{user?.name}</span>
+                      <span className="max-w-32 truncate text-sm font-medium text-foreground">{user?.name}</span>
                     </div>
                     <Button onClick={handleLogout} variant="outline" className="w-full smooth-transition bg-transparent hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 hover:border-amber-300 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:border-amber-700 dark:hover:text-amber-200">
                       <LogOut className="w-4 h-4 mr-2" />
