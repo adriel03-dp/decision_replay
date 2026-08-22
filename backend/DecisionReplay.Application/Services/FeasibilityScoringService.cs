@@ -5,7 +5,7 @@ namespace DecisionReplay.Application.Services;
 
 public sealed class FeasibilityScoringService
 {
-    public const string CurrentRulesVersion = "2.0";
+    public const string CurrentRulesVersion = "2.1";
     public FeasibilityAssessment Calculate(
         StructuredDecisionData decision,
         DecisionDomainTemplate template,
@@ -22,9 +22,25 @@ public sealed class FeasibilityScoringService
         var missingPenalty = Math.Min(20, validation.MissingFields.Count * 4);
         var rawScore = factors.Sum(factor => factor.WeightedScore);
         var finalScore = Math.Clamp(Math.Round(rawScore - missingPenalty, 1), 0, 100);
+        var economics = template.Domain switch
+        {
+            "project_planning" => DeliveryCostRules.Estimate(decision, 7_000),
+            "product_launch" => DeliveryCostRules.Estimate(decision, 8_000),
+            "business_startup" => DeliveryCostRules.Estimate(decision, 3_500),
+            _ => null
+        };
         var risks = BuildRisks(template, factors, validation);
+        if (economics is { FundingGap: > 0 } && !risks.Any(risk => risk.Factor == "budget_feasibility"))
+            risks.Add(new DecisionRisk
+            {
+                Code = "delivery_funding_gap", Factor = "budget_feasibility", Severity = "Medium",
+                Message = FormattableString.Invariant($"Estimated delivery cost exceeds the available budget by {economics.Currency} {economics.FundingGap:0.##}, including contingency."),
+                Mitigation = "Review cost assumptions and defer optional scope. Additional funding requires explicitly relaxing the budget limit."
+            });
         var riskLevel = CalculateRiskLevel(finalScore, risks);
         var recommendations = BuildRecommendations(factors, validation);
+        if (economics is { FundingGap: > 0 })
+            recommendations.Add("Resolve the estimated funding gap before committing; preserve must-have scope and respect fixed budget and deadline limits.");
 
         return new FeasibilityAssessment
         {
@@ -35,13 +51,7 @@ public sealed class FeasibilityScoringService
             Recommendations = recommendations,
             CalculatedAt = DateTime.UtcNow,
             RulesVersion = CurrentRulesVersion,
-            Economics = template.Domain switch
-            {
-                "project_planning" => DeliveryCostRules.Estimate(decision, 7_000),
-                "product_launch" => DeliveryCostRules.Estimate(decision, 8_000),
-                "business_startup" => DeliveryCostRules.Estimate(decision, 3_500),
-                _ => null
-            }
+            Economics = economics
         };
     }
 
