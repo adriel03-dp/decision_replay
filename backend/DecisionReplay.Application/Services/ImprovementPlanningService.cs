@@ -22,10 +22,10 @@ public sealed class ImprovementPlanningService(DecisionValidationService validat
         if (!fixedFields.Contains("budget") && baseline.Economics is { } economics && baseline.FactorBreakdown.Any(f => f.Factor == "budget_feasibility" && f.Score < 100))
             candidates.Add((new() { ["budget"] = Math.Ceiling(economics.EstimatedCost * 1.25).ToString(CultureInfo.InvariantCulture) },
                 "Requires additional funding. The proposed budget targets 1.25 times the estimated cost; it does not establish that funding is available."));
-        var scope = DeliveryCostRules.SplitList(original.Get("scope"));
-        if (!fixedFields.Contains("scope") && scope.Length > 1)
-            candidates.Add((new() { ["scope"] = string.Join(", ", scope.Take((int)Math.Ceiling(scope.Length / 2d))) },
-                "Defers later listed deliverables. List order is used only as a proposed priority; confirm that the retained scope is useful and dependencies still hold."));
+        if (!fixedFields.Contains("scope"))
+            foreach (var reducedScope in ScopePriorityRules.ReducedScopes(original))
+                candidates.Add((new() { ["scope"] = reducedScope },
+                    "Defers optional deliverables while preserving every selected must-have. Confirm that the retained scope is useful and dependencies still hold."));
         if (!fixedFields.Contains("timeline_months") && DecisionValidationService.TryNumber(original.Get("timeline_months"), out var months) && months is > 0 and < 120)
             candidates.Add((new() { ["timeline_months"] = Math.Min(120, Math.Ceiling(months * 1.5)).ToString(CultureInfo.InvariantCulture) },
                 "Moves the delivery deadline and increases funded time. Confirm that the deadline and resulting cost are acceptable."));
