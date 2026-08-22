@@ -14,7 +14,7 @@ flowchart TD
   APP --> FLOW[Validated AI workflow]
   FLOW --> PORT[IAiProvider / provider resolver]
   PORT --> GROQ[Groq: extraction by default]
-  PORT --> OLLAMA[Existing external Ollama: analysis and wording]
+  PORT --> OLLAMA[Decision Replay Ollama: analysis and wording]
   APP --> DB[(MongoDB)]
 ```
 
@@ -24,21 +24,23 @@ The backend has Domain, Application, Infrastructure and API projects. Provider-s
 
 Copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env.local`. Supply MongoDB and a random JWT secret of at least 32 characters. Keep these files private. Runtime environment variables take precedence over dotenv values.
 
-Default `AI_PROVIDER=hybrid` keeps **Groq extraction**, using `GROQ_API_KEY` and `GROQ_MODEL`, and uses Ollama for other operations. `AI_PROVIDER=ollama` enables all-local extraction and analysis without a cloud key; `AI_PROVIDER=groq` selects cloud inference throughout. `AI_EXTRACTION_PROVIDER` optionally overrides extraction routing. `AI_MODEL` overrides the model only in a single-provider mode. Provider secrets never reach the frontend.
+Default `AI_PROVIDER=hybrid` keeps **Groq extraction**, using `GROQ_API_KEY` and an explicitly configured, account-accessible `GROQ_MODEL`, and uses Ollama for other operations. `AI_PROVIDER=ollama` enables all-local extraction and analysis without a cloud key; `AI_PROVIDER=groq` selects cloud inference throughout. `AI_EXTRACTION_PROVIDER` optionally overrides extraction routing. `AI_MODEL` overrides the model only in a single-provider mode. Provider secrets never reach the frontend.
 
-Use the **existing** `sovereign-dev` Ollama container and its installed model. This project does not install Ollama, pull model weights, or manage that container or volume. Ensure it is running through its owning project's normal workflow.
+Decision Replay owns a separate Ollama container, reachable on host port **11435**. It reuses the installed model files through a **read-only external volume mount**; it does not download weights or use sovereign-dev's Ollama server. The existing model volume must remain available, but that project's server does not need to run. Decision Replay keeps its own writable runtime state in a separate volume.
 
 ```env
 # Backend running directly on Windows
-OLLAMA_BASE_URL=http://localhost:11434
+OLLAMA_BASE_URL=http://localhost:11435
 OLLAMA_MODEL=qwen2.5-coder:3b
 # Backend inside Docker Desktop: use this URL instead
-# OLLAMA_BASE_URL=http://host.docker.internal:11434
+# OLLAMA_BASE_URL=http://ollama:11434
 AI_REQUEST_TIMEOUT_SECONDS=120
 AI_MAX_RETRIES=1
 AI_TEMPERATURE=0.1
 AI_MAX_OUTPUT_TOKENS=2048
 ```
+
+`AI_INTERACTIVE_WORDING=false` (default) keeps optional local explanation, plan wording and text-replay summary calls out of interactive creation/replay. Deterministic explanations and task descriptions remain. Set it to `true` to restore synchronous model wording; CPU inference can add minutes. Explicit historical analysis, reflection and evaluation still use Ollama.
 
 The backend checks `GET /api/tags` for the exact configured model before Ollama inference, then sends `POST /api/chat` with `stream=false` and reads `message.content`. No Ollama API key is required. URLs and model names come from configuration. A missing model fails explicitly; there is deliberately no automatic download mechanism.
 
@@ -63,7 +65,7 @@ From the repository root, copy `.env.example` to `.env` if you need Compose over
 docker compose up --build
 ```
 
-Compose manages only this project's frontend, backend and MongoDB, with a separate Mongo volume. Its backend reaches the existing Ollama through Docker Desktop's host gateway. Frontend port defaults to **3001** to avoid the existing sovereign-dev frontend; backend uses 5000 and Mongo uses 27017. Adjust conflicting host ports before starting. Application images contain dependencies and compiled code, never model weights. Do not run lifecycle commands against the sovereign-dev project from here.
+Compose manages this project's frontend, backend, MongoDB and dedicated Ollama runtime. The backend reaches Ollama at `http://ollama:11434` inside its own Docker network. Start just the local model server for native development with `docker compose up -d --pull never ollama`. `OLLAMA_MODEL_VOLUME` selects the already-populated external model volume (currently `sovereign-dev_ollama-data`). The external volume is never removed by this project's Compose lifecycle commands. Frontend port defaults to **3002** to avoid sovereign-dev on 3000 and Langfuse on 3001; backend uses 5000 and Mongo uses 27017. Adjust conflicting host ports before starting. Application images contain dependencies and compiled code, never model weights. Do not run lifecycle commands against the sovereign-dev project from here.
 
 CPU inference is supported. In the observed environment, the loaded Q4 model occupied approximately 2.3 GiB in Ollama and used no VRAM; several analyses exceeded 120 seconds. Allow memory for the OS, Mongo and both applications as well. An 8 GiB machine can be tight; 16 GiB provides more headroom. These are planning estimates, not guaranteed minimum requirements. Increase the configurable timeout for a slow CPU if appropriate; keep inference sequential because resources are shared.
 

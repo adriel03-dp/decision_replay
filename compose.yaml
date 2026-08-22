@@ -1,5 +1,16 @@
-# Ollama is an existing external service. This compose project never owns its container or volume.
+# Decision Replay owns its Ollama runtime. Existing weights are mounted read-only.
 services:
+  ollama:
+    image: ollama/ollama:0.34.0
+    environment:
+      OLLAMA_MODELS: /installed-models/models
+      OLLAMA_NUM_PARALLEL: "1"
+      OLLAMA_MAX_LOADED_MODELS: "1"
+    volumes:
+      - installed-ollama-models:/installed-models:ro
+      - decision-replay-ollama:/root/.ollama
+    ports:
+      - "127.0.0.1:${OLLAMA_PORT:-11435}:11434"
   mongo:
     image: mongo:7
     volumes:
@@ -19,12 +30,14 @@ services:
       ASPNETCORE_URLS: http://+:8080
       MONGODB_CONNECTION_STRING: mongodb://mongo:27017
       AI_PROVIDER: ${AI_PROVIDER:-hybrid}
-      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b}
       DECISION_REPLAY_USE_IN_MEMORY: "false"
     depends_on:
       mongo:
         condition: service_healthy
+      ollama:
+        condition: service_started
     ports:
       - "127.0.0.1:5000:8080"
   frontend:
@@ -39,6 +52,10 @@ services:
     depends_on:
       - backend
     ports:
-      - "127.0.0.1:${FRONTEND_PORT:-3001}:3000"
+      - "127.0.0.1:${FRONTEND_PORT:-3002}:3000"
 volumes:
   decision-replay-mongo:
+  decision-replay-ollama:
+  installed-ollama-models:
+    external: true
+    name: ${OLLAMA_MODEL_VOLUME:-sovereign-dev_ollama-data}
