@@ -91,7 +91,38 @@ public sealed class FeasibilityAssessment
     public List<string> Recommendations { get; set; } = new();
     public DateTime CalculatedAt { get; set; } = DateTime.UtcNow;
     public string RulesVersion { get; set; } = "1.0";
+    public string ScoreMeaning { get; set; } = "Heuristic feasibility index out of 100; not a calibrated probability of project success.";
+    public EconomicEstimate? Economics { get; set; }
 }
+
+public sealed class EconomicEstimate
+{
+    public string Currency { get; set; } = "USD";
+    public double AvailableBudget { get; set; }
+    public double MonthlyCostPerPerson { get; set; }
+    public double ContingencyPercent { get; set; }
+    public double ScopeMultiplier { get; set; }
+    public double MonthlyBurn { get; set; }
+    public double EstimatedCost { get; set; }
+    public double FundingGap { get; set; }
+    public double RunwayMonths { get; set; }
+    public List<string> Assumptions { get; set; } = new();
+}
+
+public sealed class ImprovementProposal
+{
+    public string Status { get; set; } = "no_supported_improvement";
+    public string Notice { get; set; } = "Hypothetical proposal requiring your review. Scores use the same rules as the original; they do not guarantee success.";
+    public Dictionary<string, string> ProposedFields { get; set; } = new(StringComparer.OrdinalIgnoreCase);
+    public List<ProposedFieldChange> Changes { get; set; } = new();
+    public List<string> Tradeoffs { get; set; } = new();
+    public List<string> MissingFields { get; set; } = new();
+    public FeasibilityAssessment? Assessment { get; set; }
+    public double ScoreDelta { get; set; }
+    public ActionPlan? Plan { get; set; }
+}
+
+public sealed record ProposedFieldChange(string Field, string From, string To);
 
 public sealed class DecisionValidationResult
 {
@@ -99,6 +130,7 @@ public sealed class DecisionValidationResult
     public List<string> Errors { get; set; } = new();
     public List<string> Warnings { get; set; } = new();
     public List<string> MissingFields { get; set; } = new();
+    public List<string> InvalidFields { get; set; } = new();
 }
 
 public sealed class AuditTrailEntry
@@ -124,4 +156,5 @@ public sealed class DecisionVersion
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DecisionContextSnapshot? Context { get; set; }
     public List<ReplayAnalysisRecord> AiAnalyses { get; set; } = new();
+    public ImprovementProposal? Improvement { get; set; }
 }
