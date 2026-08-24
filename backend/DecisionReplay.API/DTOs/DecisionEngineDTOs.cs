@@ -19,6 +19,7 @@ public sealed record ReplayDecisionEngineRequest
 
 public sealed record AnalyzeStructuredDecisionRequest
 {
+    [MaxLength(20_000)] public string? OriginalInput { get; init; }
     [Required, MaxLength(100)] public string Domain { get; init; } = "project_planning";
     [Required, MinLength(10), MaxLength(20_000)] public string Goal { get; init; } = string.Empty;
     [MaxLength(200)] public string Title { get; init; } = string.Empty;
