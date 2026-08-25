@@ -63,13 +63,9 @@ public sealed class DecisionsV2Controller : ControllerBase
     public async Task<ActionResult<DecisionEngineResponse>> AnalyzeStructured(
         [FromBody] AnalyzeStructuredDecisionRequest request, CancellationToken cancellationToken)
     {
-        if (request.Fields.Count > 100 || request.Fields.Any(pair => pair.Key.Length > 100 || pair.Value == null || pair.Value.Length > 20_000))
-            throw new ArgumentException("Supply at most 100 bounded, non-null fields.");
-        var decision = await _engine.AnalyzeStructuredAndCreateAsync(new StructuredDecisionData
-        {
-            Domain = request.Domain, Title = string.IsNullOrWhiteSpace(request.Title) ? request.Goal[..Math.Min(80, request.Goal.Length)] : request.Title.Trim(),
-            Goal = request.Goal.Trim(), Fields = new(request.Fields, StringComparer.OrdinalIgnoreCase)
-        }, UserId(), cancellationToken);
+        var structured = DecisionRequestMapper.Structured(request);
+        if (string.IsNullOrWhiteSpace(structured.Title)) structured.Title = structured.Goal[..Math.Min(80, structured.Goal.Length)];
+        var decision = await _engine.AnalyzeStructuredAndCreateAsync(structured, UserId(), cancellationToken, request.OriginalInput);
         return CreatedAtAction(nameof(GetById), new { id = decision.Id }, ToResponse(decision));
     }
 
@@ -116,6 +112,14 @@ public sealed class DecisionsV2Controller : ControllerBase
         return Ok(new ReplayDecisionResponse(
             ToResponse(result.Decision),
             result.Comparison));
+    }
+
+    [HttpPost("{id:guid}/improvement/accept")]
+    public async Task<ActionResult<ReplayDecisionResponse>> AcceptImprovement(Guid id, AcceptImprovementRequest request,
+        [FromServices] ImprovementAcceptanceService acceptance, CancellationToken token)
+    {
+        var result = await acceptance.AcceptAsync(id, UserId(), request.SourceVersion, token);
+        return Ok(new ReplayDecisionResponse(ToResponse(result.Decision), result.Comparison));
     }
 
     [HttpGet("{id:guid}/versions")]
