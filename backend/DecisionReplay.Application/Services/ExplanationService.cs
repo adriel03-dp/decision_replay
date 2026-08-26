@@ -32,6 +32,6 @@ public sealed class ExplanationService
         return $"Decision Replay graded this plan at {assessment.FeasibilityScore:0.#}/100 " +
                $"with {assessment.RiskLevel} risk. The biggest improvement areas are " +
                $"{string.Join(" and ", weakest.Select(factor => factor.Factor.Replace('_', ' ')))}. " +
-               "Strengthening those areas will move the next version closer to a stronger, more feasible plan.";
+               "This is a heuristic feasibility index, not a probability of project success. Review the assumptions and proposed changes before committing.";
     }
 }
