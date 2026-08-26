@@ -55,6 +55,7 @@ public sealed class AiLanguageRateLimitMiddleware
     }
 
     private static bool UsesLanguageInterface(HttpRequest request) =>
-        (request.Path.StartsWithSegments("/api/v2/decisions") || request.Path.StartsWithSegments("/api/ai/experiments")) &&
+        (request.Path.StartsWithSegments("/api/v2/decisions") || request.Path.StartsWithSegments("/api/ai/experiments")
+            || request.Path.StartsWithSegments("/api/v2/requirements/preview")) &&
         request.Method == HttpMethods.Post;
 }
