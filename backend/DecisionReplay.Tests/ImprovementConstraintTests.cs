@@ -187,7 +187,7 @@ public sealed class ImprovementConstraintTests
         var restored = (await repository.GetByIdForUserAsync(decision.Id, "owner"))!;
         Assert.Equal(oldPlan.StartDate, regenerated.StartDate);
         Assert.Equal(oldPlan.EndDate, regenerated.EndDate);
-        Assert.Equal("2.0", restored.GetCurrentVersion()!.Feasibility.RulesVersion);
+        Assert.Equal(FeasibilityScoringService.CurrentRulesVersion, restored.GetCurrentVersion()!.Feasibility.RulesVersion);
         Assert.Equal("1.0", restored.Versions[0].Feasibility.RulesVersion);
         Assert.Equal(oldPlan.EndDate, restored.GetCurrentVersion()!.Improvement!.ConstraintCheck!.DeadlineDate);
         Assert.Equal(regenerated.StartDate, restored.GetCurrentVersion()!.Improvement!.Plan!.StartDate);
