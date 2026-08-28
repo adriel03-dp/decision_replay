@@ -15,10 +15,12 @@ public static class AiServiceRegistration
         services.AddSingleton<IGoldenDatasetCatalog, EmbeddedGoldenDatasetCatalog>();
         services.AddScoped<IAiProvider, OllamaProvider>();
         services.AddScoped<IAiProvider, GroqProvider>();
+        services.AddScoped<IAiProvider, DisabledAiProvider>();
         services.AddScoped<IAiProviderResolver, AiProviderResolver>();
         services.AddScoped<AiExecutionScope>();
         services.AddScoped<AiWorkflowService>();
-        services.AddScoped<IAiLanguageService, AiLanguageService>();
+        if (configuration.Provider == "none") services.AddScoped<IAiLanguageService, RulesLanguageService>();
+        else services.AddScoped<IAiLanguageService, AiLanguageService>();
         services.AddScoped<EvaluationService>();
         services.AddScoped<HistoricalReplayService>();
         return services;
