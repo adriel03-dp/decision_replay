@@ -1,6 +1,5 @@
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Text.RegularExpressions;
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.ValueObjects;
 using Microsoft.Extensions.Logging;
@@ -44,7 +43,9 @@ public sealed class AiLanguageService(AiWorkflowService workflow, IAiProviderRes
         catch (AiException ex) when (providers.DeterministicFallback)
         {
             logger.LogWarning("Structured extraction used deterministic fallback. ErrorCode={ErrorCode}", ex.Code);
-            return ExtractWithFallback(input);
+            var fallback = await new RulesLanguageService().ExtractDecisionAsync(input, templates, cancellationToken);
+            fallback.Assumptions.Insert(0, "AI extraction failed; a deterministic parser extracted explicit values only. See AI execution metadata.");
+            return fallback;
         }
     }
 
@@ -93,32 +94,6 @@ public sealed class AiLanguageService(AiWorkflowService workflow, IAiProviderRes
             logger.LogWarning("Plan enhancement retained original wording. ErrorCode={ErrorCode}", ex.Code);
             return Array.Empty<PlanTaskEnhancement>();
         }
-    }
-
-    private static StructuredDecisionData ExtractWithFallback(string input)
-    {
-        var text = input.ToLowerInvariant();
-        var domain = Regex.IsMatch(text, @"\b(startup|start a business|new business|company)\b") ? "business_startup"
-            : Regex.IsMatch(text, @"\b(career|job|role|resign|promotion)\b") ? "career_decision"
-            : Regex.IsMatch(text, @"\b(degree|course|university|study|education)\b") ? "education_path"
-            : Regex.IsMatch(text, @"\b(product launch|launch|mvp|customers?)\b") ? "product_launch" : "project_planning";
-        var fields = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var (name, pattern) in new[]
-        {
-            ("budget", @"(?:budget|cost|funding)[^\d]{0,20}\$?\s*([\d,]+(?:\.\d+)?)"),
-            ("timeline_months", @"(\d+(?:\.\d+)?)\s*(?:months?|mos?)"),
-            ("team_size", @"(?:team|staff|people|developers?)[^\d]{0,15}(\d+)"),
-            ("weekly_hours", @"(\d+(?:\.\d+)?)\s*(?:hours?|hrs?)\s*(?:per|a)?\s*week")
-        })
-        {
-            var match = Regex.Match(input, pattern, RegexOptions.IgnoreCase);
-            if (match.Success) fields[name] = match.Groups[1].Value.Replace(",", "");
-        }
-        var goalField = domain switch { "project_planning" => "project_goal", "product_launch" => "product_goal", "business_startup" => "business_idea", "education_path" => "program", _ => null };
-        if (goalField != null) fields[goalField] = input.Trim();
-        var singleLine = input.ReplaceLineEndings(" ").Trim();
-        return new() { Domain = domain, Title = singleLine[..Math.Min(80, singleLine.Length)], Goal = input.Trim(), Fields = fields,
-            Assumptions = new() { "AI extraction failed; a deterministic parser extracted only explicit values and the stated goal. See AI execution metadata." } };
     }
 
     // Wire values may be strings or JSON numbers. Reject objects, arrays, booleans and null;
