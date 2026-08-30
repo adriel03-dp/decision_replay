@@ -18,6 +18,7 @@ public sealed class DecisionEngineService
     private readonly IAiLanguageService _languageService;
     private readonly IDecisionV2Repository _repository;
     private readonly AiExecutionScope? _executions;
+    private readonly ImprovementPlanningService _improvements;
 
     public DecisionEngineService(
         DecisionParserService parser,
@@ -30,7 +31,8 @@ public sealed class DecisionEngineService
         AuditTrailService audit,
         IAiLanguageService languageService,
         IDecisionV2Repository repository,
-        AiExecutionScope? executions = null)
+        AiExecutionScope? executions = null,
+        ImprovementPlanningService? improvements = null)
     {
         _parser = parser;
         _validation = validation;
@@ -43,12 +45,25 @@ public sealed class DecisionEngineService
         _languageService = languageService;
         _repository = repository;
         _executions = executions;
+        _improvements = improvements ?? new(validation, scoring);
     }
 
     public async Task<DecisionV2> AnalyzeAndCreateAsync(
         string naturalLanguageInput,
         string userId,
         CancellationToken cancellationToken = default)
+        => await CreateAsync(naturalLanguageInput, userId, null, cancellationToken);
+
+    public Task<DecisionV2> AnalyzeStructuredAndCreateAsync(StructuredDecisionData structured, string userId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!_templates.IsSupported(structured.Domain)) throw new ArgumentException("Unsupported decision domain.");
+        if (string.IsNullOrWhiteSpace(structured.Goal)) throw new ArgumentException("A goal is required.");
+        return CreateAsync(structured.Goal.Trim(), userId, structured, cancellationToken);
+    }
+
+    private async Task<DecisionV2> CreateAsync(string naturalLanguageInput, string userId,
+        StructuredDecisionData? structured, CancellationToken cancellationToken)
     {
         var decisionId = Guid.NewGuid();
         if (_executions != null) _executions.Context = _executions.Context with { OwnerId = userId, DecisionId = decisionId };
@@ -56,7 +71,7 @@ public sealed class DecisionEngineService
             decisionId,
             1,
             naturalLanguageInput,
-            cancellationToken);
+            cancellationToken, structured);
         var decision = new DecisionV2(
             decisionId,
             naturalLanguageInput,
@@ -172,6 +187,8 @@ public sealed class DecisionEngineService
             template,
             version.Feasibility,
             cancellationToken);
+        version.Improvement = await _improvements.ProposeAsync(decision.Id, version.Version,
+            version.StructuredData, template, version.Feasibility, cancellationToken);
         decision.AddVersion(version);
         decision.AuditTrail.Add(_audit.Create(
             AuditActionType.PlanGenerated,
@@ -200,10 +217,12 @@ public sealed class DecisionEngineService
         Guid decisionId,
         int versionNumber,
         string naturalLanguageInput,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StructuredDecisionData? supplied = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_executions != null) _executions.Context = _executions.Context with { ContextVersion = versionNumber };
-        var structured = await _parser.ParseAsync(naturalLanguageInput, cancellationToken);
+        var structured = supplied ?? await _parser.ParseAsync(naturalLanguageInput, cancellationToken);
         var template = _templates.Get(structured.Domain);
         structured.Domain = template.Domain;
 
@@ -234,6 +253,7 @@ public sealed class DecisionEngineService
             Feasibility = feasibility,
             Plan = plan,
             Explanation = explanation,
+            Improvement = await _improvements.ProposeAsync(decisionId, versionNumber, structured, template, feasibility, cancellationToken),
             CreatedAt = DateTime.UtcNow
         };
         version.Context = ReplayContextService.Snapshot(version);
