@@ -15,6 +15,14 @@ public sealed record ReplayDecisionEngineRequest
     public string UpdatedInput { get; init; } = string.Empty;
 }
 
+public sealed record AnalyzeStructuredDecisionRequest
+{
+    [Required, MaxLength(100)] public string Domain { get; init; } = "project_planning";
+    [Required, MinLength(10), MaxLength(20_000)] public string Goal { get; init; } = string.Empty;
+    [MaxLength(200)] public string Title { get; init; } = string.Empty;
+    [Required] public Dictionary<string, string> Fields { get; init; } = new();
+}
+
 public sealed record DecisionEngineResponse(
     Guid DecisionId,
     int Version,
@@ -33,7 +41,12 @@ public sealed record DecisionEngineResponse(
     string Explanation,
     ActionPlan? Plan,
     IReadOnlyList<AuditTrailEntry> AuditTrail,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string RulesVersion = "1.0",
+    string ScoreMeaning = "Heuristic feasibility index; not a success probability.",
+    EconomicEstimate? Economics = null,
+    ImprovementProposal? Improvement = null,
+    IReadOnlyList<string>? ValidationWarnings = null);
 
 public sealed record DecisionEngineSummaryResponse(
     Guid DecisionId,
