@@ -13,6 +13,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DecisionReplay.Infrastructu
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DecisionReplay.Tests", "DecisionReplay.Tests\DecisionReplay.Tests.csproj", "{06DA4BF3-43C4-4990-8A6C-88BF6D900FE1}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "DecisionReplay.Api.Tests", "DecisionReplay.Api.Tests\DecisionReplay.Api.Tests.csproj", "{E5AF2443-E86C-497C-ADBA-C92786543B1D}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -42,5 +44,9 @@ Global
 		{06DA4BF3-43C4-4990-8A6C-88BF6D900FE1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{06DA4BF3-43C4-4990-8A6C-88BF6D900FE1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{06DA4BF3-43C4-4990-8A6C-88BF6D900FE1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E5AF2443-E86C-497C-ADBA-C92786543B1D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E5AF2443-E86C-497C-ADBA-C92786543B1D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E5AF2443-E86C-497C-ADBA-C92786543B1D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E5AF2443-E86C-497C-ADBA-C92786543B1D}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 EndGlobal
