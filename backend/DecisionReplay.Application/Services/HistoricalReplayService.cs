@@ -40,6 +40,7 @@ public sealed class HistoricalReplayService(IDecisionV2Repository decisions, AiW
         ValidateFields(next.StructuredData.Fields, template);
         next.Validation = validation.Validate(next.StructuredData, template);
         next.Feasibility = scoring.Calculate(next.StructuredData, template, next.Validation);
+        next.Improvement = null;
         // A changed context must not inherit an explanation, analysis or plan for different inputs.
         next.Explanation = "A new historical context was recorded. Review its deterministic assessment and run a T0 analysis.";
         next.Plan = null;
