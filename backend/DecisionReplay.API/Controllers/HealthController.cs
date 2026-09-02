@@ -57,7 +57,7 @@ public sealed class HealthController : ControllerBase
         var aiChecks = new List<DecisionReplay.Domain.ValueObjects.AiAvailability>();
         foreach (var target in new[] { extraction, analysis }.Distinct())
             aiChecks.Add(await _providers.Resolve(target.Provider).CheckAvailabilityAsync(target.Model, cancellationToken));
-        var healthy = mongoHealthy && aiChecks.All(check => check.Status is "healthy" or "configured");
+        var healthy = mongoHealthy && aiChecks.All(check => check.Status is "healthy" or "configured" or "disabled");
         var response = new
         {
             status = healthy ? "healthy" : "degraded",
@@ -76,7 +76,7 @@ public sealed class HealthController : ControllerBase
                 {
                     status = aiChecks.First(check => check.Provider == extraction.Provider && check.Model == extraction.Model).Status,
                     provider = extraction.Provider,
-                    capability = "Structured field extraction",
+                    capability = extraction.Provider == "none" ? "Deterministic field extraction" : "AI-assisted field extraction",
                     planGradingAuthority = false
                 },
                 ai = aiChecks,
@@ -84,7 +84,7 @@ public sealed class HealthController : ControllerBase
                 {
                     status = "healthy",
                     grading = "structured plan assessment",
-                    rulesVersion = "1.0"
+                    rulesVersion = DecisionReplay.Application.Services.FeasibilityScoringService.CurrentRulesVersion
                 }
             }
         };
