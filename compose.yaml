@@ -1,6 +1,7 @@
 # Decision Replay owns its Ollama runtime. Existing weights are mounted read-only.
 services:
   ollama:
+    profiles: ["ai"]
     image: ollama/ollama:0.34.0
     environment:
       OLLAMA_MODELS: /installed-models/models
@@ -29,15 +30,13 @@ services:
       ASPNETCORE_ENVIRONMENT: Development
       ASPNETCORE_URLS: http://+:8080
       MONGODB_CONNECTION_STRING: mongodb://mongo:27017
-      AI_PROVIDER: ${AI_PROVIDER:-hybrid}
+      AI_PROVIDER: ${AI_PROVIDER:-none}
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://ollama:11434}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b}
       DECISION_REPLAY_USE_IN_MEMORY: "false"
     depends_on:
       mongo:
         condition: service_healthy
-      ollama:
-        condition: service_started
     ports:
       - "127.0.0.1:5000:8080"
   frontend:
