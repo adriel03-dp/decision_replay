@@ -91,6 +91,36 @@ export interface DecisionEngineResponse {
   plan: ActionPlan | null
   auditTrail: AuditTrailEntry[]
   createdAt: string
+  rulesVersion?: string
+  scoreMeaning?: string
+  economics?: EconomicEstimate | null
+  improvement?: ImprovementProposal | null
+  validationWarnings?: string[] | null
+}
+
+export interface EconomicEstimate {
+  currency: string
+  availableBudget: number
+  monthlyCostPerPerson: number
+  contingencyPercent: number
+  scopeMultiplier: number
+  monthlyBurn: number
+  estimatedCost: number
+  fundingGap: number
+  runwayMonths: number
+  assumptions: string[]
+}
+
+export interface ImprovementProposal {
+  status: string
+  notice: string
+  proposedFields: Record<string, string>
+  changes: { field: string; from: string; to: string }[]
+  tradeoffs: string[]
+  missingFields: string[]
+  assessment: { feasibilityScore: number; riskLevel: string | number; scoreMeaning: string; economics?: EconomicEstimate | null } | null
+  scoreDelta: number
+  plan: ActionPlan | null
 }
 
 export interface DecisionEngineSummary {
