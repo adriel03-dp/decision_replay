@@ -22,7 +22,7 @@ import { decisionApi } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
 
 const EXAMPLE =
-  "I want to launch a subscription meal-planning app for busy professionals. My budget is $35,000, the timeline is 6 months, and I have a team of 3. The first release needs onboarding, weekly plans, payments, and basic analytics. I need to validate demand before committing the full budget."
+  "Build a mobile application within six months with a team of six and a budget of 100,000 USD; scope: onboarding, weekly plans, payments, analytics; technical_readiness: partial; monthly_cost_per_person: 2000; contingency_percent: 20"
 
 const PIPELINE = [
   ["Submit", "Share the current version of your idea, even if it is still rough."],
@@ -94,8 +94,8 @@ export default function NewDecisionPage() {
             </h1>
             <p className="mt-4 max-w-2xl text-sm leading-7 text-slate-400">
               Include the goal, budget, timeline, resources, scope, and constraints you know. Decision Replay grades
-              the idea, exposes the flaws, and gives you the exact improvement advice needed to move toward a more
-              feasible outcome.
+              feasibility using explicit assumptions and suggests changes you can review. The score is a planning
+              index, not a probability of success.
             </p>
 
             <Card className="mt-8 overflow-hidden border-white/10 bg-slate-950/80 shadow-2xl shadow-black/30">
@@ -113,8 +113,13 @@ export default function NewDecisionPage() {
                   maxLength={20000}
                   onChange={(event) => setInput(event.target.value)}
                   placeholder="Describe your idea, current plan, constraints, and what you want to make more feasible."
+                  aria-describedby="decision-input-help"
                   className="min-h-64 w-full resize-y rounded-xl border border-white/10 bg-black/25 p-4 text-sm leading-7 text-slate-200 outline-none transition placeholder:text-slate-700 focus:border-green-400/50 focus:ring-2 focus:ring-green-400/10"
                 />
+                <p id="decision-input-help" className="mt-3 text-sm leading-6 text-slate-300">
+                  Use explicit quantities and labels for details: budget 100000 USD; timeline_months: 6; team_size: 6;
+                  scope: login, payments, reporting; technical_readiness: partial. Review the extracted fields in your report.
+                </p>
                 {error && (
                   <div role="alert" className="mt-3 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
                     {error}

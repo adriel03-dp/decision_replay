@@ -24,6 +24,7 @@ import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { decisionApi } from "@/lib/api"
+import { RulesAssessment } from "@/components/rules-assessment"
 import type { DecisionEngineResponse } from "@/lib/api-types"
 
 function scoreColor(score: number) {
@@ -79,8 +80,8 @@ export default function DecisionAnalyticsPage() {
     if (!decision) return
     setRegenerating(true)
     try {
-      const plan = await decisionApi.generatePlan(decision.decisionId)
-      setDecision({ ...decision, plan })
+      await decisionApi.generatePlan(decision.decisionId)
+      setDecision(await decisionApi.get(decision.decisionId))
     } finally {
       setRegenerating(false)
     }
@@ -166,6 +167,8 @@ export default function DecisionAnalyticsPage() {
             </div>
           </div>
         </header>
+
+        <RulesAssessment decision={decision} />
 
         <section className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
