@@ -58,7 +58,7 @@ export function RulesAssessment({ decision }: { decision: DecisionEngineResponse
         </div>
       )}
       <div className="grid items-start gap-5 lg:grid-cols-2">
-        <Card className="min-w-0 border-white/10 bg-slate-950/75">
+        <Card className="min-w-0 border-white/10 bg-slate-950/75 text-slate-100">
           <CardHeader><CardTitle className="text-base">Delivery economics</CardTitle></CardHeader>
           <CardContent>
             {decision.economics ? <CostSummary cost={decision.economics} /> : (
@@ -66,7 +66,7 @@ export function RulesAssessment({ decision }: { decision: DecisionEngineResponse
             )}
           </CardContent>
         </Card>
-        <Card className="min-w-0 border-white/10 bg-slate-950/75">
+        <Card className="min-w-0 border-white/10 bg-slate-950/75 text-slate-100">
           <CardHeader><CardTitle className="text-base">Proposed plan improvement</CardTitle></CardHeader>
           <CardContent className="space-y-4">
             {limits && <div className="rounded-lg border border-white/15 p-4 text-sm leading-6 text-slate-300">
@@ -74,6 +74,7 @@ export function RulesAssessment({ decision }: { decision: DecisionEngineResponse
               {limits.budgetCeiling != null && <p>Budget ceiling: {amount(limits.budgetCeiling, decision.economics?.currency ?? decision.structuredFields.currency ?? "USD")}</p>}
               {limits.timelineCeilingMonths != null && <p>Timeline limit: {limits.timelineCeilingMonths} months</p>}
               {limits.deadlineDate && <p>Plan deadline: {new Date(limits.deadlineDate).toLocaleDateString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" })}</p>}
+              {decision.structuredFields.required_scope && decision.structuredFields.required_scope !== "none" && <p>Must-have scope: {decision.structuredFields.required_scope}</p>}
               {!!limits.reasons.length && <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-200">{limits.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
             </div>}
             {proposal?.status === "proposed" && proposal.assessment && limits?.estimatesWithinLimits ? (
