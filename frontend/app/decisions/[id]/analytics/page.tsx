@@ -25,6 +25,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { decisionApi } from "@/lib/api"
 import { RulesAssessment } from "@/components/rules-assessment"
+import { AcceptImprovement } from "@/components/accept-improvement"
 import type { DecisionEngineResponse } from "@/lib/api-types"
 
 function scoreColor(score: number) {
@@ -121,7 +122,7 @@ export default function DecisionAnalyticsPage() {
   }
 
   return (
-    <main className="min-h-screen bg-[#080b0d] text-slate-100">
+    <main className="min-h-screen bg-[#080b0d] text-slate-100 [&_[data-slot=card]]:text-slate-100">
       <div
         className="pointer-events-none fixed inset-0 opacity-70"
         style={{
@@ -169,6 +170,7 @@ export default function DecisionAnalyticsPage() {
         </header>
 
         <RulesAssessment decision={decision} />
+        <AcceptImprovement decision={decision} onAccepted={result => setDecision(result.decision)} />
 
         <section className="mt-5 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[
