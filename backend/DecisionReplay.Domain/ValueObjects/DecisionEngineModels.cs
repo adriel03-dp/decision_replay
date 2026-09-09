@@ -120,9 +120,22 @@ public sealed class ImprovementProposal
     public FeasibilityAssessment? Assessment { get; set; }
     public double ScoreDelta { get; set; }
     public ActionPlan? Plan { get; set; }
+    public ImprovementConstraintCheck? ConstraintCheck { get; set; }
 }
 
 public sealed record ProposedFieldChange(string Field, string From, string To);
+
+public sealed class ImprovementConstraintCheck
+{
+    public string PolicyVersion { get; set; } = "1.0";
+    public List<string> FixedFields { get; set; } = new();
+    public double? BudgetCeiling { get; set; }
+    public double? TimelineCeilingMonths { get; set; }
+    public DateTime? DeadlineDate { get; set; }
+    public bool EstimatesWithinLimits { get; set; }
+    public bool NeedsInformation { get; set; }
+    public List<string> Reasons { get; set; } = new();
+}
 
 public sealed class DecisionValidationResult
 {
