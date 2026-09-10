@@ -202,7 +202,9 @@ public sealed class DomainTemplateService
         {
             Domain = domain,
             DisplayName = displayName,
-            Fields = fields,
+            Fields = domain is "project_planning" or "product_launch" or "business_startup"
+                ? fields.Append(Optional("fixed_fields", "Fields that proposals cannot change; defaults to budget, timeline_months; use none to allow changes", DecisionFieldType.List)).ToList()
+                : fields,
             ScoringFactors = factors,
             RiskRules = risks,
             ReplaySensitiveFields = replayFields,
