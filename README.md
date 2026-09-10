@@ -29,11 +29,27 @@ Default `AI_PROVIDER=none` needs no AI key, model or Ollama server. The parser r
 
 Opt-in `AI_PROVIDER=hybrid` uses **Groq** (not xAI Grok) for extraction, with `GROQ_API_KEY` and an explicitly configured, account-accessible `GROQ_MODEL`, and Ollama for other operations. `AI_PROVIDER=ollama` enables all-local inference; `AI_PROVIDER=groq` selects cloud inference throughout. `AI_EXTRACTION_PROVIDER` optionally overrides extraction routing in enabled modes. `AI_MODEL` overrides the model only in a single-provider mode. Provider secrets never reach the frontend. Rules-only mode rejects explicit AI requests, including manually selected evaluation targets.
 
-Rules v2.0 expose delivery cost, funding gap, runway and assumptions for project, product and startup domains. **Budget and timeline are fixed by default.** Proposed improvements must keep locked inputs unchanged and fit the estimated cost and effort within those limits. A higher score is insufficient if a fixed limit is violated. Whole-month deadlines use calendar months, and plan phases and milestones cannot run past the inclusive end date. Replay and regeneration preserve the original start date while the timeline remains fixed.
+Rules v2.1 expose delivery cost, funding gap, runway and assumptions for project, product and startup domains. A positive estimated funding gap always creates a budget risk, even if other factors produce a strong overall score. **Budget and timeline are fixed by default.** Proposed improvements must keep locked inputs unchanged and fit the estimated cost and effort within those limits. A higher score is insufficient if a fixed limit is violated. Whole-month deadlines use calendar months, and plan phases and milestones cannot run past the inclusive end date. Replay and regeneration preserve the original start date while the timeline remains fixed.
 
 The creation form lets users unlock budget or timeline explicitly and optionally lock every scope item. Text analysis/replay accepts `fixedFields: ["budget", "timeline_months", "scope"]` as authoritative request metadata; an empty array unlocks all fields. Structured entry/context uses a `fixed_fields` field containing comma-separated template names, or `none` for explicit flexibility. Text input also supports the `fixed_fields:` label. Request metadata takes precedence over text labels, replay inherits previous locks when no override is supplied, and AI output cannot unlock them.
 
 Proposals include changed inputs, tradeoffs, applied constraint checks and a separate plan while retaining the original version. `constraints_unsatisfied` means the tested changes could not fit the fixed limits; `needs_information` means a limit could not be verified. Saved proposals predating constraint checks must be regenerated before the UI presents them as supported improvements. An improvement is not guaranteed. All scores are heuristic feasibility indices, **not calibrated probabilities of success**.
+
+## Review requirements and adopt a plan
+
+The new-decision page prepares an editable draft before scoring. Correct its category, goal and extracted fields, choose must-have scope, check corrections, then acknowledge the requirements to create an assessment. Preview and validation do not save a decision. Missing information can be acknowledged for a conservative assessment; invalid values must be corrected. The original description is retained separately from confirmed fields, which are scored without another extraction call.
+
+In delivery domains, `required_scope` contains selected items from `scope`. Every proposal must retain them, including when the remaining limits are flexible. Locking the entire scope forbids all deferrals. The report shows the must-haves and a confirmation dialog for adopting a checked proposal. Adoption creates a new version and audit entry, retaining prior versions, plans and outcomes. It never treats the proposed score as an achieved outcome.
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/v2/requirements/domains` | Public field definitions and supported categories |
+| `POST /api/v2/requirements/preview` | Authenticated draft extraction; accepts `input` and optional `fixedFields` |
+| `POST /api/v2/requirements/validate` | Authenticated review of structured corrections; returns validation and `canSubmit` |
+| `POST /api/v2/decisions/analyze-structured` | Create from confirmed `domain`, `title`, `goal`, `fields` and optional `originalInput` |
+| `POST /api/v2/decisions/{id}/improvement/accept` | Adopt the saved proposal using `{ "sourceVersion": 1 }` |
+
+Acceptance uses server-owned fields and recalculates scores and constraints. Client-supplied proposal changes are not accepted. A stale version or changed scoring methodology returns 409; regenerate proposals created under older rules. Repeated acceptance cannot append duplicate versions. The existing authenticated text-creation API remains available for integrations.
 
 Decision Replay owns a separate Ollama container, reachable on host port **11435**. It reuses the installed model files through a **read-only external volume mount**; it does not download weights or use sovereign-dev's Ollama server. The existing model volume must remain available, but that project's server does not need to run. Decision Replay keeps its own writable runtime state in a separate volume.
 
@@ -162,12 +178,15 @@ cd backend
 dotnet test DecisionReplay.sln
 cd ../frontend
 npm ci
+npm test
 npm run lint
 npm run typecheck
 npm run build
 ```
 
 Transport integration tests use mock HTTP handlers and need no cloud key. Tests cover routing, prompt resolution, strict parsing, retries/fallback/cancellation, Ollama/Groq protocol contracts, T0 isolation, explicit outcome reveal, version immutability, optimistic concurrency and evaluation persistence. Live connectivity can be checked from the actual backend environment with `dotnet run -- --check-ollama`, or from its built Docker image using the configured Docker Desktop URL.
+
+`DecisionReplay.Api.Tests` starts the real API pipeline with signed synthetic JWTs and in-memory decision/AI repositories. It checks read-only drafts, corrected creation, ownership, adoption conflicts, preserved limits/must-haves, original/adopted exports and zero AI executions. It needs no running MongoDB, Ollama or cloud key. Frontend tests use Node 22.13.1 or newer with type stripping to check draft payloads and error messages. Type checking generates Next.js route types before running TypeScript, including on a clean checkout. GitHub Actions runs both suites, lint, type checking and the production build on PRs to main and pushes to main or `codex/**`; remote CI still needs to run after pushing.
 
 This remains a development/portfolio system: three cases are insufficient for general quality claims; semantic groundedness and consistency need human evaluation; full-stack browser/Mongo integration coverage needs expansion. Embedded histories are capped but large documents still need a production archival strategy. Existing JWT browser storage and deployment hardening should be reviewed before handling sensitive decisions. RAG, agent frameworks and LLM-as-a-judge are intentionally absent because the current structured workflow does not require them.
 
