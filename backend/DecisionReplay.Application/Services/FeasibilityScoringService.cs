@@ -124,10 +124,7 @@ public sealed class FeasibilityScoringService
     private static double TimelineScore(StructuredDecisionData decision)
     {
         if (!Number(decision, "timeline_months", out var timeline)) return 35;
-        var team = Math.Max(1, NumberOr(decision, "team_size", 1));
-        var scope = Math.Max(1, ListCount(decision.Get("scope")));
-        var dependencies = ListCount(decision.Get("dependencies"));
-        var required = Math.Max(1, (scope * 1.25 + dependencies * .8) / Math.Sqrt(team));
+        var required = DeliveryScheduleRules.EstimateMonths(decision);
         return FitRatio(timeline / required);
     }
 

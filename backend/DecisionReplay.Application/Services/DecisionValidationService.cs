@@ -17,6 +17,11 @@ public sealed class DecisionValidationService
 
         foreach (var unknown in decision.Fields.Keys.Where(key => !template.Fields.Any(field => field.Name.Equals(key, StringComparison.OrdinalIgnoreCase))))
             result.Errors.Add($"Unknown field '{unknown}' for domain '{template.Domain}'.");
+        if (template.Fields.Any(field => field.Name == "fixed_fields"))
+        {
+            try { ImprovementConstraintPolicy.Resolve(decision, template); }
+            catch (ArgumentException error) { result.Errors.Add(error.Message); }
+        }
 
         foreach (var field in template.Fields)
         {
