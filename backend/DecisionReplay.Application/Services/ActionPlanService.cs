@@ -22,10 +22,11 @@ public sealed class ActionPlanService
         StructuredDecisionData decision,
         DecisionDomainTemplate template,
         FeasibilityAssessment assessment,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        DateTime? startDateOverride = null)
     {
         var timelineMonths = NumberOr(decision, "timeline_months", 6);
-        var startDate = ReadStartDate(decision);
+        var startDate = startDateOverride?.Date ?? ReadStartDate(decision);
         var phases = _phaseBuilder.Build(timelineMonths, startDate).ToList();
         var risksByFactor = assessment.Risks
             .GroupBy(risk => risk.Factor, StringComparer.OrdinalIgnoreCase)
@@ -60,7 +61,7 @@ public sealed class ActionPlanService
             Version = version,
             TimelineMonths = timelineMonths,
             StartDate = startDate,
-            EndDate = startDate.AddDays(Math.Max(1, (int)Math.Round(timelineMonths * 30.4375)) - 1),
+            EndDate = DeliveryScheduleRules.EndDate(startDate, timelineMonths),
             FeasibilityScore = assessment.FeasibilityScore,
             RiskLevel = assessment.RiskLevel.ToString(),
             Phases = phases,
@@ -97,6 +98,8 @@ public sealed class ActionPlanService
         {
             if (phase.StartWeek < 1 || phase.EndWeek < phase.StartWeek || phase.EndWeek > maximumWeek + 1)
                 throw new InvalidOperationException($"Phase '{phase.PhaseName}' exceeds the selected timeline.");
+            if (phase.StartDate < plan.StartDate || phase.EndDate < phase.StartDate || phase.EndDate > plan.EndDate)
+                throw new InvalidOperationException($"Phase '{phase.PhaseName}' exceeds the plan's calendar deadline.");
             if (phase.Tasks.Count == 0)
                 throw new InvalidOperationException($"Phase '{phase.PhaseName}' requires at least one task.");
 
@@ -108,6 +111,8 @@ public sealed class ActionPlanService
                     throw new InvalidOperationException("Every plan task requires a name, description, and success criteria.");
             }
         }
+        if (plan.Milestones.Any(milestone => milestone.TargetDate < plan.StartDate || milestone.TargetDate > plan.EndDate))
+            throw new InvalidOperationException("A milestone exceeds the plan's calendar deadline.");
     }
 
     private static void ApplyEnhancements(
@@ -166,7 +171,7 @@ public sealed class ActionPlanService
         StructuredDecisionData decision,
         string field,
         double fallback) =>
-        DecisionValidationService.TryNumber(decision.Get(field), out var value)
-            ? Math.Clamp(value, .25, 120)
+        DecisionValidationService.TryNumber(decision.Get(field), out var value) && value is > 0 and <= 120
+            ? value
             : fallback;
 }
