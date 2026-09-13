@@ -63,8 +63,9 @@ public sealed class RulesFirstEngineTests
         var first = decision.Versions.Single();
         Assert.NotNull(first.Plan);
         Assert.Equal("2.0", first.Feasibility.RulesVersion);
-        Assert.NotNull(first.Improvement?.Assessment);
-        Assert.True(first.Improvement!.ScoreDelta > 0);
+        Assert.Equal("constraints_unsatisfied", first.Improvement!.Status);
+        Assert.Null(first.Improvement.Assessment);
+        Assert.Contains("budget", first.Improvement.ConstraintCheck!.FixedFields);
         var replay = await engine.ReplayAsync(decision.Id, input.Replace("100000", "400000"), "owner");
         Assert.Equal(2, replay.Decision.Versions.Count);
         Assert.Equal("100000", replay.Decision.Versions[0].StructuredData.Get("budget"));
@@ -218,7 +219,7 @@ public sealed class RulesFirstEngineTests
         new(new(language, _templates), _validation, _templates, _scoring, new(), new(language), new(new(), language), new(), language, repository);
     private static StructuredDecisionData Project() => new() { Domain = "project_planning", Title = "Mobile application", Goal = "Build a mobile application", Fields = new()
     { ["project_goal"] = "Build a mobile application", ["budget"] = "100000", ["timeline_months"] = "6", ["team_size"] = "6",
-        ["scope"] = "login, payments, reporting", ["currency"] = "USD", ["technical_readiness"] = "high" } };
+        ["scope"] = "login, payments, reporting", ["currency"] = "USD", ["technical_readiness"] = "high", ["fixed_fields"] = "none" } };
     private sealed class ExtractionMustNotRun : IAiLanguageService
     {
         public bool IsConfigured => false;
