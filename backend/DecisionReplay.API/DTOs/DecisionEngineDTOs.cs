@@ -7,12 +7,14 @@ public sealed record AnalyzeDecisionRequest
 {
     [Required, MinLength(10), MaxLength(20_000)]
     public string Input { get; init; } = string.Empty;
+    [MaxLength(25)] public List<string>? FixedFields { get; init; }
 }
 
 public sealed record ReplayDecisionEngineRequest
 {
     [Required, MinLength(10), MaxLength(20_000)]
     public string UpdatedInput { get; init; } = string.Empty;
+    [MaxLength(25)] public List<string>? FixedFields { get; init; }
 }
 
 public sealed record AnalyzeStructuredDecisionRequest
