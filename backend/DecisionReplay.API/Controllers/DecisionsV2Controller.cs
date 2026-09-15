@@ -49,7 +49,8 @@ public sealed class DecisionsV2Controller : ControllerBase
         var decision = await _engine.AnalyzeAndCreateAsync(
             request.Input,
             UserId(),
-            cancellationToken);
+            cancellationToken,
+            request.FixedFields);
         return CreatedAtAction(
             nameof(GetById),
             new { id = decision.Id },
@@ -110,7 +111,8 @@ public sealed class DecisionsV2Controller : ControllerBase
             id,
             request.UpdatedInput,
             UserId(),
-            cancellationToken);
+            cancellationToken,
+            request.FixedFields);
         return Ok(new ReplayDecisionResponse(
             ToResponse(result.Decision),
             result.Comparison));
