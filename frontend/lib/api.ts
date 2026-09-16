@@ -7,8 +7,8 @@ import type {
 } from "./api-types"
 
 export const decisionApi = {
-  async analyze(input: string): Promise<DecisionEngineResponse> {
-    const response = await apiClient.post<DecisionEngineResponse>("/api/v2/decisions", { input })
+  async analyze(input: string, fixedFields?: string[]): Promise<DecisionEngineResponse> {
+    const response = await apiClient.post<DecisionEngineResponse>("/api/v2/decisions", { input, fixedFields })
     return response.data
   },
 

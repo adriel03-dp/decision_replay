@@ -37,6 +37,9 @@ export default function NewDecisionPage() {
   const [input, setInput] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [fixedBudget, setFixedBudget] = useState(true)
+  const [fixedTimeline, setFixedTimeline] = useState(true)
+  const [fixedScope, setFixedScope] = useState(false)
 
   async function handleAnalyze() {
     if (input.trim().length < 10) {
@@ -47,7 +50,9 @@ export default function NewDecisionPage() {
     setSubmitting(true)
     setError(null)
     try {
-      const result = await decisionApi.analyze(input.trim())
+      const fixedFields = [fixedBudget ? "budget" : null, fixedTimeline ? "timeline_months" : null, fixedScope ? "scope" : null]
+        .filter((field): field is string => field !== null)
+      const result = await decisionApi.analyze(input.trim(), fixedFields)
       toast({
         title: "Plan graded",
         description: `Version ${result.version} received a ${Math.round(result.feasibilityScore)}/100 plan grade.`,
@@ -120,6 +125,25 @@ export default function NewDecisionPage() {
                   Use explicit quantities and labels for details: budget 100000 USD; timeline_months: 6; team_size: 6;
                   scope: login, payments, reporting; technical_readiness: partial. Review the extracted fields in your report.
                 </p>
+                <fieldset disabled={submitting} className="mt-5 rounded-xl border border-white/15 p-4">
+                  <legend className="px-2 text-sm font-semibold text-slate-100">Limits for proposed improvements</legend>
+                  <p className="mb-2 text-sm leading-6 text-slate-300">Keep a limit checked to prevent proposals from changing it. A fixed budget must also cover the estimated cost; a fixed timeline must fit the estimated work.</p>
+                  <div className="space-y-1">
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-slate-100">
+                      <input type="checkbox" checked={fixedBudget} onChange={(event) => setFixedBudget(event.target.checked)} className="h-4 w-4 accent-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-300" />
+                      Keep my budget fixed
+                    </label>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-slate-100">
+                      <input type="checkbox" checked={fixedTimeline} onChange={(event) => setFixedTimeline(event.target.checked)} className="h-4 w-4 accent-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-300" />
+                      Keep my timeline fixed
+                    </label>
+                    <label className="flex min-h-11 cursor-pointer items-center gap-3 text-sm text-slate-100">
+                      <input type="checkbox" checked={fixedScope} onChange={(event) => setFixedScope(event.target.checked)} className="h-4 w-4 accent-emerald-400 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-sky-300" />
+                      Keep every listed scope item
+                    </label>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-slate-300">For project, product and startup proposals. Unchecking a limit allows a hypothetical change; it does not change your submitted requirements.</p>
+                </fieldset>
                 {error && (
                   <div role="alert" className="mt-3 rounded-lg border border-red-400/20 bg-red-400/10 p-3 text-sm text-red-300">
                     {error}
