@@ -35,5 +35,9 @@ public enum AuditActionType
     ExplanationGenerated,
     PlanGenerated,
     ReplayCreated,
-    PlanExported
+    PlanExported,
+    HistoricalContextRecorded,
+    OutcomeRecorded,
+    ScenarioCreated,
+    HistoricalAnalysisCompleted
 }
