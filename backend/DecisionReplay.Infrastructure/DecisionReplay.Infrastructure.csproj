@@ -20,4 +20,9 @@
     <ProjectReference Include="..\DecisionReplay.Domain\DecisionReplay.Domain.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <EmbeddedResource Include="AI/Prompts/**/*.json" />
+    <EmbeddedResource Include="AI/Datasets/**/*.json" />
+  </ItemGroup>
+
 </Project>
