@@ -9,6 +9,8 @@ export function ThemeToggle() {
   const [isDark, setIsDark] = React.useState(false)
 
   React.useEffect(() => {
+    // Hydrate from the document after the server render.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setMounted(true)
     setIsDark(document.documentElement.classList.contains("dark"))
   }, [])

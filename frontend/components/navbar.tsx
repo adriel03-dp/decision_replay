@@ -52,6 +52,7 @@ export function Navbar() {
                 >
                   Analytics
                 </Link>
+                <Link href="/ai-lab" className="text-foreground/70 hover:text-foreground smooth-transition font-medium">AI Lab</Link>
               </>
             )}
             <div className="flex items-center gap-3">
@@ -125,6 +126,7 @@ export function Navbar() {
                       Analytics
                     </Button>
                   </Link>
+                  <Link href="/ai-lab"><Button variant="ghost" className="w-full justify-start">AI Lab</Button></Link>
                   <Link href="/settings">
                     <Button variant="ghost" className="w-full justify-start hover:bg-gradient-to-r hover:from-amber-100 hover:to-orange-100 dark:hover:from-amber-900/20 dark:hover:to-orange-900/20 dark:hover:text-amber-200">
                       Settings
