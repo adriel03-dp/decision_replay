@@ -5,7 +5,7 @@ import axios from "axios"
 import Link from "next/link"
 import { useParams } from "next/navigation"
 import {
-  AlertTriangle,
+
   ArrowLeft,
   CalendarDays,
   CheckCircle2,
@@ -144,6 +144,7 @@ export default function DecisionAnalyticsPage() {
               </div>
               <h1 className="mt-4 max-w-3xl text-3xl font-semibold tracking-[-0.04em] sm:text-4xl">{decision.title}</h1>
               <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-400">{decision.goal}</p>
+              <Link href={`/decisions/${decisionId}/history`} className="mt-4 inline-block text-sm font-medium text-emerald-300 underline">Historical context, what-if scenarios & outcomes</Link>
               <p className="mt-4 max-w-4xl border-l-2 border-sky-400/40 pl-4 text-sm leading-6 text-slate-300">
                 {decision.explanation}
               </p>
