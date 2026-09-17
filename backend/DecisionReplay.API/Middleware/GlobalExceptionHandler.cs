@@ -1,6 +1,7 @@
 using Microsoft.AspNetCore.Diagnostics;
 using System.Net;
 using System.Text.Json;
+using DecisionReplay.Domain.ValueObjects;
 
 namespace DecisionReplay.API.Middleware;
 
@@ -72,6 +73,10 @@ public class GlobalExceptionHandler : IExceptionHandler
     {
         return exception switch
         {
+            DecisionConflictException =>
+                (409, "DecisionConflict", exception.Message),
+            AiException ai =>
+                (ai.Code == "timeout" ? 504 : ai.Code == "rate_limited" ? 429 : 503, ai.Code, ai.Message),
             UnauthorizedAccessException =>
                 ((int)HttpStatusCode.Forbidden, "Forbidden", "You do not have permission to access this resource."),
 
