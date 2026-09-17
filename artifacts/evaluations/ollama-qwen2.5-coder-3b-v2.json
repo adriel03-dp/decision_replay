@@ -1,0 +1,248 @@
+{
+  "experiments": [
+    {
+      "id": "cd9db443-3030-4a0b-93be-53a209604cdd",
+      "ownerId": "cli",
+      "datasetVersion": "v1",
+      "datasetHash": "a25818676268c5608780eed6671d5feee449583544a9d0ba4e98fd6dbbb94393",
+      "target": {
+        "provider": "ollama",
+        "model": "qwen2.5-coder:3b"
+      },
+      "promptVersion": "v2",
+      "promptHash": "cba5e3bb9c584d6d3f4817bcfe7f9ecab4902d344f667a16ced790cf0f5593dd",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:42:21.8752903Z",
+      "finishedAt": "2026-09-17T09:51:32.3849964Z",
+      "status": "completed_with_failures",
+      "results": [
+        {
+          "caseId": "decision-001",
+          "executionId": "0d79c56c-cfb2-4721-b5f7-299f1e692ded",
+          "success": false,
+          "errorCode": "schema_validation",
+          "output": null,
+          "metrics": {
+            "structuredValidity": 0,
+            "missingInformationCoverage": 0,
+            "riskConceptCoverage": 0,
+            "alternativeConceptCoverage": 0,
+            "citationIntegrity": 0,
+            "uncitedNonHypothesisClaims": 0,
+            "latencyMs": 149144.4259,
+            "failureRate": 1
+          },
+          "humanReview": null
+        },
+        {
+          "caseId": "decision-002",
+          "executionId": "28b74047-669d-4f07-995b-7c47cb05a34a",
+          "success": false,
+          "errorCode": "schema_validation",
+          "output": null,
+          "metrics": {
+            "structuredValidity": 0,
+            "missingInformationCoverage": 0,
+            "riskConceptCoverage": 0,
+            "alternativeConceptCoverage": 0,
+            "citationIntegrity": 0,
+            "uncitedNonHypothesisClaims": 0,
+            "latencyMs": 229097.2795,
+            "failureRate": 1
+          },
+          "humanReview": null
+        },
+        {
+          "caseId": "decision-003",
+          "executionId": "999cfb9a-4069-461c-98e8-ea831d64618d",
+          "success": false,
+          "errorCode": "schema_validation",
+          "output": null,
+          "metrics": {
+            "structuredValidity": 0,
+            "missingInformationCoverage": 0,
+            "riskConceptCoverage": 0,
+            "alternativeConceptCoverage": 0,
+            "citationIntegrity": 0,
+            "uncitedNonHypothesisClaims": 0,
+            "latencyMs": 172154.8023,
+            "failureRate": 1
+          },
+          "humanReview": null
+        }
+      ],
+      "metrics": {
+        "structuredValidity": 0,
+        "missingInformationCoverage": 0,
+        "riskConceptCoverage": 0,
+        "alternativeConceptCoverage": 0,
+        "citationIntegrity": 0,
+        "uncitedNonHypothesisClaims": 0,
+        "latencyMs": 183465.50256666666,
+        "failureRate": 1
+      },
+      "apiCost": null
+    }
+  ],
+  "executions": [
+    {
+      "id": "999cfb9a-4069-461c-98e8-ea831d64618d",
+      "ownerId": "cli",
+      "requestId": "85ad6014-3b1f-4901-806a-f5e3179fd1bb",
+      "decisionId": null,
+      "contextVersion": 1,
+      "replayId": null,
+      "experimentId": "cd9db443-3030-4a0b-93be-53a209604cdd",
+      "operation": "decision-analysis",
+      "promptVersion": "v2",
+      "promptHash": "cba5e3bb9c584d6d3f4817bcfe7f9ecab4902d344f667a16ced790cf0f5593dd",
+      "inputHash": "27708f79ba41483079434f80bf53ef8d508a54a9ed4c360adb02623fd5644055",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:48:40.2256425Z",
+      "finishedAt": "2026-09-17T09:51:32.3748818Z",
+      "latencyMs": 172149.3706,
+      "promptConstructionMs": 0.2033,
+      "status": "failed",
+      "errorCode": "schema_validation",
+      "retryCount": 1,
+      "usedFallback": false,
+      "attempts": [
+        {
+          "number": 1,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "inferenceMs": 120060.0308,
+          "validationMs": 0,
+          "errorCode": "timeout",
+          "validationError": null,
+          "output": null,
+          "inputTokens": null,
+          "outputTokens": null
+        },
+        {
+          "number": 2,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "inferenceMs": 51767.7272,
+          "validationMs": 0.7746,
+          "errorCode": "schema_validation",
+          "validationError": "Use only evidence[].id values in evidenceIds; never cite assumptions[].id or constraints[].id. Unsupported assumptions must use evidenceIds=[] and isHypothesis=true.",
+          "output": "{\n  \u0022assumptions\u0022: [\n    {\n      \u0022text\u0022: \u0022The external identity API will be ready before integration\u0022,\n      \u0022evidenceIds\u0022: [\u0022a1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022risks\u0022: [\n    {\n      \u0022text\u0022: \u0022The external identity API may not be ready before integration, leading to delays and potential scope reduction\u0022,\n      \u0022evidenceIds\u0022: [\u0022e1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022missingInformation\u0022: [\n    \u0022The exact timeline for the external identity API\u0027s delivery\u0022\n  ],\n  \u0022alternatives\u0022: [\n    {\n      \u0022name\u0022: \u0022Phase the release\u0022,\n      \u0022tradeoff\u0022: \u0022Deliver a reduced scope portal in four months, potentially delaying the full portal launch\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022name\u0022: \u0022Negotiate a later delivery date\u0022,\n      \u0022tradeoff\u0022: \u0022Deliver the portal later, potentially extending the timeline and increasing costs\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022analysis\u0022: \u0022The decision process is constrained by the external identity API\u0027s readiness, which is uncertain. The team has limited capacity and a fixed timeline of four months. The decision to deliver a reduced scope portal or negotiate a later delivery date is speculative, as it depends on the actual timeline for the external identity API\u0027s delivery.\u0022,\n  \u0022confidence\u0022: 0.5\n}",
+          "inputTokens": 660,
+          "outputTokens": 315
+        }
+      ],
+      "output": null
+    },
+    {
+      "id": "28b74047-669d-4f07-995b-7c47cb05a34a",
+      "ownerId": "cli",
+      "requestId": "85ad6014-3b1f-4901-806a-f5e3179fd1bb",
+      "decisionId": null,
+      "contextVersion": 1,
+      "replayId": null,
+      "experimentId": "cd9db443-3030-4a0b-93be-53a209604cdd",
+      "operation": "decision-analysis",
+      "promptVersion": "v2",
+      "promptHash": "cba5e3bb9c584d6d3f4817bcfe7f9ecab4902d344f667a16ced790cf0f5593dd",
+      "inputHash": "6befe34aa20d73f2219594d161470e13fbdf53fc14cb7c51d4aeed28e9428664",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:44:51.1271315Z",
+      "finishedAt": "2026-09-17T09:48:40.2109222Z",
+      "latencyMs": 229084.1248,
+      "promptConstructionMs": 0.1176,
+      "status": "failed",
+      "errorCode": "schema_validation",
+      "retryCount": 1,
+      "usedFallback": false,
+      "attempts": [
+        {
+          "number": 1,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "inferenceMs": 120036.2198,
+          "validationMs": 0,
+          "errorCode": "timeout",
+          "validationError": null,
+          "output": null,
+          "inputTokens": null,
+          "outputTokens": null
+        },
+        {
+          "number": 2,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "inferenceMs": 108746.2563,
+          "validationMs": 3.3148,
+          "errorCode": "schema_validation",
+          "validationError": "Use only evidence[].id values in evidenceIds; never cite assumptions[].id or constraints[].id. Unsupported assumptions must use evidenceIds=[] and isHypothesis=true.",
+          "output": "{\n  \u0022assumptions\u0022: [\n    {\n      \u0022text\u0022: \u0022A suitable role can be obtained within six months\u0022,\n      \u0022evidenceIds\u0022: [\u0022a1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022risks\u0022: [\n    {\n      \u0022text\u0022: \u0022Market demand for AI engineers is unknown\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022missingInformation\u0022: [\n    \u0022Market demand for AI engineers\u0022,\n    \u0022Family expenses\u0022\n  ],\n  \u0022alternatives\u0022: [\n    {\n      \u0022name\u0022: \u0022Apply while employed\u0022,\n      \u0022tradeoff\u0022: \u0022May not be able to fully focus on the new role\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022name\u0022: \u0022Resign and study full time\u0022,\n      \u0022tradeoff\u0022: \u0022May not be able to fully focus on the new role\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022analysis\u0022: \u0022The decision process is time-isolated and does not include actual outcomes or present-day knowledge. The analysis focuses on the assumptions, risks, missing information, and actionable alternatives based on the provided context.\u0022,\n  \u0022confidence\u0022: 0.5\n}",
+          "inputTokens": 641,
+          "outputTokens": 270
+        }
+      ],
+      "output": null
+    },
+    {
+      "id": "0d79c56c-cfb2-4721-b5f7-299f1e692ded",
+      "ownerId": "cli",
+      "requestId": "85ad6014-3b1f-4901-806a-f5e3179fd1bb",
+      "decisionId": null,
+      "contextVersion": 1,
+      "replayId": null,
+      "experimentId": "cd9db443-3030-4a0b-93be-53a209604cdd",
+      "operation": "decision-analysis",
+      "promptVersion": "v2",
+      "promptHash": "cba5e3bb9c584d6d3f4817bcfe7f9ecab4902d344f667a16ced790cf0f5593dd",
+      "inputHash": "d2bf67e2644f63c89ba8f2f465e850e64738a4ca9602362dfa7c0623cde1ab8e",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:42:21.9997243Z",
+      "finishedAt": "2026-09-17T09:44:51.0988802Z",
+      "latencyMs": 149115.0106,
+      "promptConstructionMs": 17.2487,
+      "status": "failed",
+      "errorCode": "schema_validation",
+      "retryCount": 1,
+      "usedFallback": false,
+      "attempts": [
+        {
+          "number": 1,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "inferenceMs": 80317.8024,
+          "validationMs": 15.6674,
+          "errorCode": "schema_validation",
+          "validationError": "Use only evidence[].id values in evidenceIds; never cite assumptions[].id or constraints[].id. Unsupported assumptions must use evidenceIds=[] and isHypothesis=true.",
+          "output": "{\n  \u0022assumptions\u0022: [\n    {\n      \u0022text\u0022: \u0022Interview interest will turn into paying demand\u0022,\n      \u0022evidenceIds\u0022: [\u0022a1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022risks\u0022: [\n    {\n      \u0022text\u0022: \u0022Market demand may not be as high as expected\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022text\u0022: \u0022Team capacity may not be sufficient to manage a full-scale launch\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022missingInformation\u0022: [\n    \u0022Market demand data beyond the five local shops\u0022,\n    \u0022Team capacity beyond the two initial members\u0022\n  ],\n  \u0022alternatives\u0022: [\n    {\n      \u0022name\u0022: \u0022Run a smaller paid pilot\u0022,\n      \u0022tradeoff\u0022: \u0022Limited validation of paying demand\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022name\u0022: \u0022Delay launch until demand is validated\u0022,\n      \u0022tradeoff\u0022: \u0022Increased risk of missed opportunity\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022analysis\u0022: \u0022The decision process is focused on validating paying demand before committing all capital. The lack of market demand data beyond the five local shops and the limited team capacity beyond the two initial members are significant uncertainties. Running a smaller paid pilot or delaying the launch until demand is validated are actionable alternatives that address these uncertainties.\u0022,\n  \u0022confidence\u0022: 0.5\n}",
+          "inputTokens": 608,
+          "outputTokens": 327
+        },
+        {
+          "number": 2,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "inferenceMs": 68447.3792,
+          "validationMs": 0.2189,
+          "errorCode": "schema_validation",
+          "validationError": "Use only evidence[].id values in evidenceIds; never cite assumptions[].id or constraints[].id. Unsupported assumptions must use evidenceIds=[] and isHypothesis=true.",
+          "output": "{\n  \u0022assumptions\u0022: [\n    {\n      \u0022text\u0022: \u0022Interview interest will turn into paying demand\u0022,\n      \u0022evidenceIds\u0022: [\u0022a1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022risks\u0022: [\n    {\n      \u0022text\u0022: \u0022Market demand may not be as high as expected\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022text\u0022: \u0022Team capacity may not be sufficient for a full launch\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022missingInformation\u0022: [\n    \u0022Market demand data beyond the initial five shops\u0022,\n    \u0022Team capacity beyond the initial two members\u0022\n  ],\n  \u0022alternatives\u0022: [\n    {\n      \u0022name\u0022: \u0022Run a smaller paid pilot\u0022,\n      \u0022tradeoff\u0022: \u0022Limited validation of paying demand\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022name\u0022: \u0022Delay launch until demand is validated\u0022,\n      \u0022tradeoff\u0022: \u0022Increased risk of market shift\u0022,\n      \u0022evidenceIds\u0022: [],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022analysis\u0022: \u0022The decision process is focused on validating paying demand before committing all capital. The current evidence suggests that only five local shops have expressed interest, with none having paid or signed a contract. This indicates a low market evidence score. The assumption that interview interest will turn into paying demand is speculative and lacks supporting evidence. The risks of market demand not being as high as expected and team capacity not being sufficient for a full launch are also speculative. The missing information includes market demand data beyond the initial five shops and team capacity beyond the initial two members. The alternatives of running a smaller paid pilot or delaying launch until demand is validated are hypotheses without supporting evidence.\u0022,\n  \u0022confidence\u0022: 0.5\n}",
+          "inputTokens": 686,
+          "outputTokens": 393
+        }
+      ],
+      "output": null
+    }
+  ]
+}

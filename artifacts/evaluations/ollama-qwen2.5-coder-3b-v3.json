@@ -1,0 +1,303 @@
+{
+  "experiments": [
+    {
+      "id": "1e90fc7b-4386-4bab-a3c7-551ec55cf112",
+      "ownerId": "cli",
+      "datasetVersion": "v1",
+      "datasetHash": "a25818676268c5608780eed6671d5feee449583544a9d0ba4e98fd6dbbb94393",
+      "target": {
+        "provider": "ollama",
+        "model": "qwen2.5-coder:3b"
+      },
+      "promptVersion": "v3",
+      "promptHash": "3e0f21325bb3e76eb79e52e6475b4d6a2e7dd69bbbc8e5fb452881e09e076a0b",
+      "outputContractVersion": "decision-analysis-v1",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:53:45.7839097Z",
+      "finishedAt": "2026-09-17T10:02:59.4839429Z",
+      "status": "completed_with_failures",
+      "results": [
+        {
+          "caseId": "decision-001",
+          "executionId": "fbecc872-d717-4d20-be68-346bc48f6805",
+          "success": false,
+          "errorCode": "timeout",
+          "output": null,
+          "metrics": {
+            "structuredValidity": 0,
+            "missingInformationCoverage": 0,
+            "riskConceptCoverage": 0,
+            "alternativeConceptCoverage": 0,
+            "citationIntegrity": 0,
+            "uncitedNonHypothesisClaims": 0,
+            "latencyMs": 242019.4148,
+            "failureRate": 1
+          },
+          "humanReview": null
+        },
+        {
+          "caseId": "decision-002",
+          "executionId": "d75f8097-e32b-41a7-8470-8d768fea43f4",
+          "success": true,
+          "errorCode": null,
+          "output": {
+            "assumptions": [
+              {
+                "text": "A suitable role can be obtained within six months",
+                "evidenceIds": [
+                  "e1"
+                ],
+                "isHypothesis": true
+              }
+            ],
+            "risks": [
+              {
+                "text": "Market demand for AI engineers is unknown",
+                "evidenceIds": [
+                  "e2"
+                ],
+                "isHypothesis": true
+              }
+            ],
+            "missingInformation": [
+              "Market demand for AI engineers",
+              "Current job market trends"
+            ],
+            "alternatives": [
+              {
+                "name": "Apply while employed",
+                "tradeoff": "Potential delay in receiving a new role while maintaining current responsibilities",
+                "evidenceIds": [
+                  "e1"
+                ],
+                "isHypothesis": true
+              },
+              {
+                "name": "Resign and study full time",
+                "tradeoff": "Loss of current income and potential disruption to personal life",
+                "evidenceIds": [
+                  "e1"
+                ],
+                "isHypothesis": true
+              }
+            ],
+            "analysis": "The decision process is limited by uncertainty in the market demand for AI engineers and the potential delays in obtaining a new role while maintaining current responsibilities.",
+            "confidence": 0.5
+          },
+          "metrics": {
+            "structuredValidity": 1,
+            "missingInformationCoverage": 0.5,
+            "riskConceptCoverage": 0,
+            "alternativeConceptCoverage": 1,
+            "citationIntegrity": 1,
+            "uncitedNonHypothesisClaims": 0,
+            "latencyMs": 70921.032,
+            "failureRate": 0
+          },
+          "humanReview": null
+        },
+        {
+          "caseId": "decision-003",
+          "executionId": "6fd97f2c-762e-4698-9d88-d6316c67acf6",
+          "success": false,
+          "errorCode": "timeout",
+          "output": null,
+          "metrics": {
+            "structuredValidity": 0,
+            "missingInformationCoverage": 0,
+            "riskConceptCoverage": 0,
+            "alternativeConceptCoverage": 0,
+            "citationIntegrity": 0,
+            "uncitedNonHypothesisClaims": 0,
+            "latencyMs": 240304.5723,
+            "failureRate": 1
+          },
+          "humanReview": null
+        }
+      ],
+      "metrics": {
+        "structuredValidity": 0.3333333333333333,
+        "missingInformationCoverage": 0.16666666666666666,
+        "riskConceptCoverage": 0,
+        "alternativeConceptCoverage": 0.3333333333333333,
+        "citationIntegrity": 0.3333333333333333,
+        "uncitedNonHypothesisClaims": 0,
+        "latencyMs": 184415.00636666667,
+        "failureRate": 0.6666666666666666
+      },
+      "apiCost": null
+    }
+  ],
+  "executions": [
+    {
+      "id": "6fd97f2c-762e-4698-9d88-d6316c67acf6",
+      "ownerId": "cli",
+      "requestId": "d1e3e4dd-e14a-4cbd-af45-ef899b5147ab",
+      "decisionId": null,
+      "contextVersion": 1,
+      "replayId": null,
+      "experimentId": "1e90fc7b-4386-4bab-a3c7-551ec55cf112",
+      "operation": "decision-analysis",
+      "promptVersion": "v3",
+      "promptHash": "3e0f21325bb3e76eb79e52e6475b4d6a2e7dd69bbbc8e5fb452881e09e076a0b",
+      "inputHash": "27708f79ba41483079434f80bf53ef8d508a54a9ed4c360adb02623fd5644055",
+      "outputSchemaHash": "4f8cb848cc166ac4736111622fd17953239f5883c99f4d579d2c5bee8d511ff0",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:58:59.1794072Z",
+      "finishedAt": "2026-09-17T10:02:59.4763475Z",
+      "latencyMs": 240297.0543,
+      "promptConstructionMs": 0.2062,
+      "status": "failed",
+      "errorCode": "timeout",
+      "retryCount": 1,
+      "usedFallback": false,
+      "attempts": [
+        {
+          "number": 1,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "modelRevision": null,
+          "schemaEnforced": false,
+          "inferenceMs": 120016.8769,
+          "validationMs": 0,
+          "errorCode": "timeout",
+          "validationError": null,
+          "output": null,
+          "repairPromptVersion": null,
+          "repairPromptHash": null,
+          "inputTokens": null,
+          "outputTokens": null
+        },
+        {
+          "number": 2,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "modelRevision": null,
+          "schemaEnforced": false,
+          "inferenceMs": 120015.7013,
+          "validationMs": 0,
+          "errorCode": "timeout",
+          "validationError": null,
+          "output": null,
+          "repairPromptVersion": null,
+          "repairPromptHash": null,
+          "inputTokens": null,
+          "outputTokens": null
+        }
+      ],
+      "output": null
+    },
+    {
+      "id": "d75f8097-e32b-41a7-8470-8d768fea43f4",
+      "ownerId": "cli",
+      "requestId": "d1e3e4dd-e14a-4cbd-af45-ef899b5147ab",
+      "decisionId": null,
+      "contextVersion": 1,
+      "replayId": null,
+      "experimentId": "1e90fc7b-4386-4bab-a3c7-551ec55cf112",
+      "operation": "decision-analysis",
+      "promptVersion": "v3",
+      "promptHash": "3e0f21325bb3e76eb79e52e6475b4d6a2e7dd69bbbc8e5fb452881e09e076a0b",
+      "inputHash": "6befe34aa20d73f2219594d161470e13fbdf53fc14cb7c51d4aeed28e9428664",
+      "outputSchemaHash": "4f8cb848cc166ac4736111622fd17953239f5883c99f4d579d2c5bee8d511ff0",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:57:48.2603014Z",
+      "finishedAt": "2026-09-17T09:58:59.1512453Z",
+      "latencyMs": 70891.209,
+      "promptConstructionMs": 0.3081,
+      "status": "succeeded",
+      "errorCode": null,
+      "retryCount": 0,
+      "usedFallback": false,
+      "attempts": [
+        {
+          "number": 1,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "modelRevision": "f72c60cabf6237b07f6e632b2c48d533cef25eda2efbd34bed21c5e9c01e6225",
+          "schemaEnforced": true,
+          "inferenceMs": 70879.032,
+          "validationMs": 11.0135,
+          "errorCode": null,
+          "validationError": null,
+          "output": "{\n  \u0022assumptions\u0022: [\n    {\n      \u0022text\u0022: \u0022A suitable role can be obtained within six months\u0022,\n      \u0022evidenceIds\u0022: [\u0022e1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022risks\u0022: [\n    {\n      \u0022text\u0022: \u0022Market demand for AI engineers is unknown\u0022,\n      \u0022evidenceIds\u0022: [\u0022e2\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022missingInformation\u0022: [\n    \u0022Market demand for AI engineers\u0022,\n    \u0022Current job market trends\u0022\n  ],\n  \u0022alternatives\u0022: [\n    {\n      \u0022name\u0022: \u0022Apply while employed\u0022,\n      \u0022tradeoff\u0022: \u0022Potential delay in receiving a new role while maintaining current responsibilities\u0022,\n      \u0022evidenceIds\u0022: [\u0022e1\u0022],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022name\u0022: \u0022Resign and study full time\u0022,\n      \u0022tradeoff\u0022: \u0022Loss of current income and potential disruption to personal life\u0022,\n      \u0022evidenceIds\u0022: [\u0022e1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022analysis\u0022: \u0022The decision process is limited by uncertainty in the market demand for AI engineers and the potential delays in obtaining a new role while maintaining current responsibilities.\u0022,\n  \u0022confidence\u0022: 0.5\n}",
+          "repairPromptVersion": null,
+          "repairPromptHash": null,
+          "inputTokens": 776,
+          "outputTokens": 269
+        }
+      ],
+      "output": "{\n  \u0022assumptions\u0022: [\n    {\n      \u0022text\u0022: \u0022A suitable role can be obtained within six months\u0022,\n      \u0022evidenceIds\u0022: [\u0022e1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022risks\u0022: [\n    {\n      \u0022text\u0022: \u0022Market demand for AI engineers is unknown\u0022,\n      \u0022evidenceIds\u0022: [\u0022e2\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022missingInformation\u0022: [\n    \u0022Market demand for AI engineers\u0022,\n    \u0022Current job market trends\u0022\n  ],\n  \u0022alternatives\u0022: [\n    {\n      \u0022name\u0022: \u0022Apply while employed\u0022,\n      \u0022tradeoff\u0022: \u0022Potential delay in receiving a new role while maintaining current responsibilities\u0022,\n      \u0022evidenceIds\u0022: [\u0022e1\u0022],\n      \u0022isHypothesis\u0022: true\n    },\n    {\n      \u0022name\u0022: \u0022Resign and study full time\u0022,\n      \u0022tradeoff\u0022: \u0022Loss of current income and potential disruption to personal life\u0022,\n      \u0022evidenceIds\u0022: [\u0022e1\u0022],\n      \u0022isHypothesis\u0022: true\n    }\n  ],\n  \u0022analysis\u0022: \u0022The decision process is limited by uncertainty in the market demand for AI engineers and the potential delays in obtaining a new role while maintaining current responsibilities.\u0022,\n  \u0022confidence\u0022: 0.5\n}"
+    },
+    {
+      "id": "fbecc872-d717-4d20-be68-346bc48f6805",
+      "ownerId": "cli",
+      "requestId": "d1e3e4dd-e14a-4cbd-af45-ef899b5147ab",
+      "decisionId": null,
+      "contextVersion": 1,
+      "replayId": null,
+      "experimentId": "1e90fc7b-4386-4bab-a3c7-551ec55cf112",
+      "operation": "decision-analysis",
+      "promptVersion": "v3",
+      "promptHash": "3e0f21325bb3e76eb79e52e6475b4d6a2e7dd69bbbc8e5fb452881e09e076a0b",
+      "inputHash": "d2bf67e2644f63c89ba8f2f465e850e64738a4ca9602362dfa7c0623cde1ab8e",
+      "outputSchemaHash": "8300c14de2fcec8f6907cdba1a70790a21e4fa7488304b0e95f7ab47abae0f43",
+      "parameters": {
+        "temperature": 0.1,
+        "maxOutputTokens": 2048
+      },
+      "startedAt": "2026-09-17T09:53:45.9144101Z",
+      "finishedAt": "2026-09-17T09:57:47.3784175Z",
+      "latencyMs": 241480.3237,
+      "promptConstructionMs": 6.3974,
+      "status": "failed",
+      "errorCode": "timeout",
+      "retryCount": 1,
+      "usedFallback": false,
+      "attempts": [
+        {
+          "number": 1,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "modelRevision": null,
+          "schemaEnforced": false,
+          "inferenceMs": 120015.0774,
+          "validationMs": 0,
+          "errorCode": "timeout",
+          "validationError": null,
+          "output": null,
+          "repairPromptVersion": null,
+          "repairPromptHash": null,
+          "inputTokens": null,
+          "outputTokens": null
+        },
+        {
+          "number": 2,
+          "provider": "ollama",
+          "model": "qwen2.5-coder:3b",
+          "modelRevision": null,
+          "schemaEnforced": false,
+          "inferenceMs": 121156.4286,
+          "validationMs": 0,
+          "errorCode": "timeout",
+          "validationError": null,
+          "output": null,
+          "repairPromptVersion": null,
+          "repairPromptHash": null,
+          "inputTokens": null,
+          "outputTokens": null
+        }
+      ],
+      "output": null
+    }
+  ]
+}
