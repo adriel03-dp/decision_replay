@@ -1,5 +1,6 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Infrastructure.Persistence.Mongo;
+using DecisionReplay.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 
@@ -12,15 +13,18 @@ public sealed class HealthController : ControllerBase
     private readonly IMongoClient _mongo;
     private readonly MongoSettings _settings;
     private readonly IAiLanguageService _languageService;
+    private readonly OllamaLanguageService _ollama;
 
     public HealthController(
         IMongoClient mongo,
         MongoSettings settings,
-        IAiLanguageService languageService)
+        IAiLanguageService languageService,
+        OllamaLanguageService ollama)
     {
         _mongo = mongo;
         _settings = settings;
         _languageService = languageService;
+        _ollama = ollama;
     }
 
     [HttpGet("health")]
@@ -51,9 +55,11 @@ public sealed class HealthController : ControllerBase
             mongoError = ex.Message;
         }
 
+        var ollama = await _ollama.CheckAvailabilityAsync(cancellationToken);
+        var healthy = mongoHealthy && ollama.Status == "healthy";
         var response = new
         {
-            status = mongoHealthy ? "healthy" : "degraded",
+            status = healthy ? "healthy" : "degraded",
             timestamp = DateTime.UtcNow,
             service = "DecisionReplay API",
             version = "3.0",
@@ -68,7 +74,16 @@ public sealed class HealthController : ControllerBase
                 languageInterface = new
                 {
                     status = _languageService.IsConfigured ? "configured" : "fallback",
-                    capability = "AI decision guidance",
+                    provider = "Groq",
+                    capability = "Structured field extraction",
+                    planGradingAuthority = false
+                },
+                ollama = new
+                {
+                    status = ollama.Status,
+                    model = ollama.Model,
+                    error = ollama.Error,
+                    capability = "Explanations, plan wording, replay summaries",
                     planGradingAuthority = false
                 },
                 decisionEngine = new
@@ -79,6 +94,6 @@ public sealed class HealthController : ControllerBase
                 }
             }
         };
-        return mongoHealthy ? Ok(response) : StatusCode(503, response);
+        return healthy ? Ok(response) : StatusCode(503, response);
     }
 }
