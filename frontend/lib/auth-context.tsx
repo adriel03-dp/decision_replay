@@ -34,6 +34,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     const storedUser = localStorage.getItem('user')
 
     if (storedToken && storedUser) {
+      // Restore browser-only credentials after hydration.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setToken(storedToken)
       setUser(JSON.parse(storedUser))
     }
@@ -71,7 +73,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }))
 
       return { success: true }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error. Please try again.' }
     }
   }
@@ -107,7 +109,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }))
 
       return { success: true }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error. Please try again.' }
     }
   }
@@ -147,7 +149,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       localStorage.setItem('user', JSON.stringify(updatedUser))
 
       return { success: true }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error. Please try again.' }
     }
   }
@@ -173,7 +175,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       return { success: true }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error. Please try again.' }
     }
   }
@@ -199,7 +201,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       }
 
       return { success: true }
-    } catch (error) {
+    } catch {
       return { success: false, error: 'Network error. Please try again.' }
     }
   }
