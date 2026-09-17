@@ -17,6 +17,7 @@ public sealed class DecisionEngineService
     private readonly AuditTrailService _audit;
     private readonly IAiLanguageService _languageService;
     private readonly IDecisionV2Repository _repository;
+    private readonly AiExecutionScope? _executions;
 
     public DecisionEngineService(
         DecisionParserService parser,
@@ -28,7 +29,8 @@ public sealed class DecisionEngineService
         ActionPlanService plans,
         AuditTrailService audit,
         IAiLanguageService languageService,
-        IDecisionV2Repository repository)
+        IDecisionV2Repository repository,
+        AiExecutionScope? executions = null)
     {
         _parser = parser;
         _validation = validation;
@@ -40,6 +42,7 @@ public sealed class DecisionEngineService
         _audit = audit;
         _languageService = languageService;
         _repository = repository;
+        _executions = executions;
     }
 
     public async Task<DecisionV2> AnalyzeAndCreateAsync(
@@ -48,6 +51,7 @@ public sealed class DecisionEngineService
         CancellationToken cancellationToken = default)
     {
         var decisionId = Guid.NewGuid();
+        if (_executions != null) _executions.Context = _executions.Context with { OwnerId = userId, DecisionId = decisionId };
         var version = await BuildVersionAsync(
             decisionId,
             1,
@@ -113,6 +117,8 @@ public sealed class DecisionEngineService
             ?? throw new KeyNotFoundException("Decision not found.");
         var previous = decision.GetCurrentVersion()
             ?? throw new InvalidOperationException("Decision has no version to replay.");
+        if (decision.Versions.Count >= 100) throw new ArgumentException("Decision version limit reached.");
+        if (_executions != null) _executions.Context = _executions.Context with { OwnerId = userId, DecisionId = decisionId };
         var next = await BuildVersionAsync(
             decision.Id,
             previous.Version + 1,
@@ -150,8 +156,14 @@ public sealed class DecisionEngineService
     {
         var decision = await _repository.GetByIdForUserAsync(decisionId, userId)
             ?? throw new KeyNotFoundException("Decision not found.");
-        var version = decision.GetCurrentVersion()
+        var previous = decision.GetCurrentVersion()
             ?? throw new InvalidOperationException("Decision has no current version.");
+        if (decision.Versions.Count >= 100) throw new ArgumentException("Decision version limit reached.");
+        var version = ReplayContextService.Copy(previous);
+        version.Version++;
+        version.CreatedAt = DateTime.UtcNow;
+        version.AiAnalyses = new();
+        if (_executions != null) _executions.Context = _executions.Context with { OwnerId = userId, DecisionId = decisionId, ContextVersion = version.Version };
         var template = _templates.Get(version.StructuredData.Domain);
         version.Plan = await _plans.GenerateAsync(
             decision.Id,
@@ -160,7 +172,7 @@ public sealed class DecisionEngineService
             template,
             version.Feasibility,
             cancellationToken);
-
+        decision.AddVersion(version);
         decision.AuditTrail.Add(_audit.Create(
             AuditActionType.PlanGenerated,
             version.Version,
@@ -190,6 +202,7 @@ public sealed class DecisionEngineService
         string naturalLanguageInput,
         CancellationToken cancellationToken)
     {
+        if (_executions != null) _executions.Context = _executions.Context with { ContextVersion = versionNumber };
         var structured = await _parser.ParseAsync(naturalLanguageInput, cancellationToken);
         var template = _templates.Get(structured.Domain);
         structured.Domain = template.Domain;
@@ -212,7 +225,7 @@ public sealed class DecisionEngineService
             feasibility,
             cancellationToken);
 
-        return new DecisionVersion
+        var version = new DecisionVersion
         {
             Version = versionNumber,
             NaturalLanguageInput = naturalLanguageInput.Trim(),
@@ -223,6 +236,9 @@ public sealed class DecisionEngineService
             Explanation = explanation,
             CreatedAt = DateTime.UtcNow
         };
+        version.Context = ReplayContextService.Snapshot(version);
+        version.Context.Provenance = "captured-at-record-time; user-supplied input";
+        return version;
     }
 }
 
