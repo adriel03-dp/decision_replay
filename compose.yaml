@@ -1,0 +1,44 @@
+# Ollama is an existing external service. This compose project never owns its container or volume.
+services:
+  mongo:
+    image: mongo:7
+    volumes:
+      - decision-replay-mongo:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    ports:
+      - "127.0.0.1:27017:27017"
+  backend:
+    build: ./backend
+    env_file: ./backend/.env
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development
+      ASPNETCORE_URLS: http://+:8080
+      MONGODB_CONNECTION_STRING: mongodb://mongo:27017
+      AI_PROVIDER: ${AI_PROVIDER:-hybrid}
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://host.docker.internal:11434}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5-coder:3b}
+      DECISION_REPLAY_USE_IN_MEMORY: "false"
+    depends_on:
+      mongo:
+        condition: service_healthy
+    ports:
+      - "127.0.0.1:5000:8080"
+  frontend:
+    build:
+      context: ./frontend
+      args:
+        NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:5000/api}
+        NEXT_PUBLIC_API_TIMEOUT_MS: ${NEXT_PUBLIC_API_TIMEOUT_MS:-900000}
+    environment:
+      HOSTNAME: 0.0.0.0
+      PORT: 3000
+    depends_on:
+      - backend
+    ports:
+      - "127.0.0.1:${FRONTEND_PORT:-3001}:3000"
+volumes:
+  decision-replay-mongo:
