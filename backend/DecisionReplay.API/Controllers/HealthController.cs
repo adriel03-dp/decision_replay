@@ -1,6 +1,5 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Infrastructure.Persistence.Mongo;
-using DecisionReplay.Infrastructure.Services;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Driver;
 
@@ -12,19 +11,16 @@ public sealed class HealthController : ControllerBase
 {
     private readonly IMongoClient _mongo;
     private readonly MongoSettings _settings;
-    private readonly IAiLanguageService _languageService;
-    private readonly OllamaLanguageService _ollama;
+    private readonly IAiProviderResolver _providers;
 
     public HealthController(
         IMongoClient mongo,
         MongoSettings settings,
-        IAiLanguageService languageService,
-        OllamaLanguageService ollama)
+        IAiProviderResolver providers)
     {
         _mongo = mongo;
         _settings = settings;
-        _languageService = languageService;
-        _ollama = ollama;
+        _providers = providers;
     }
 
     [HttpGet("health")]
@@ -49,14 +45,19 @@ public sealed class HealthController : ControllerBase
                     new JsonCommand<object>("{ ping: 1 }"),
                     cancellationToken: cancellationToken);
         }
-        catch (Exception ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) { throw; }
+        catch (Exception)
         {
             mongoHealthy = false;
-            mongoError = ex.Message;
+            mongoError = "MongoDB ping failed.";
         }
 
-        var ollama = await _ollama.CheckAvailabilityAsync(cancellationToken);
-        var healthy = mongoHealthy && ollama.Status == "healthy";
+        var extraction = _providers.DefaultTarget("extraction");
+        var analysis = _providers.DefaultTarget("decision-analysis");
+        var aiChecks = new List<DecisionReplay.Domain.ValueObjects.AiAvailability>();
+        foreach (var target in new[] { extraction, analysis }.Distinct())
+            aiChecks.Add(await _providers.Resolve(target.Provider).CheckAvailabilityAsync(target.Model, cancellationToken));
+        var healthy = mongoHealthy && aiChecks.All(check => check.Status is "healthy" or "configured");
         var response = new
         {
             status = healthy ? "healthy" : "degraded",
@@ -73,19 +74,12 @@ public sealed class HealthController : ControllerBase
                 },
                 languageInterface = new
                 {
-                    status = _languageService.IsConfigured ? "configured" : "fallback",
-                    provider = "Groq",
+                    status = aiChecks.First(check => check.Provider == extraction.Provider && check.Model == extraction.Model).Status,
+                    provider = extraction.Provider,
                     capability = "Structured field extraction",
                     planGradingAuthority = false
                 },
-                ollama = new
-                {
-                    status = ollama.Status,
-                    model = ollama.Model,
-                    error = ollama.Error,
-                    capability = "Explanations, plan wording, replay summaries",
-                    planGradingAuthority = false
-                },
+                ai = aiChecks,
                 decisionEngine = new
                 {
                     status = "healthy",
