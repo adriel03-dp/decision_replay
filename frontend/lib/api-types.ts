@@ -121,6 +121,16 @@ export interface ImprovementProposal {
   assessment: { feasibilityScore: number; riskLevel: string | number; scoreMeaning: string; economics?: EconomicEstimate | null } | null
   scoreDelta: number
   plan: ActionPlan | null
+  constraintCheck?: {
+    policyVersion: string
+    fixedFields: string[]
+    budgetCeiling: number | null
+    timelineCeilingMonths: number | null
+    deadlineDate: string | null
+    estimatesWithinLimits: boolean
+    needsInformation: boolean
+    reasons: string[]
+  } | null
 }
 
 export interface DecisionEngineSummary {

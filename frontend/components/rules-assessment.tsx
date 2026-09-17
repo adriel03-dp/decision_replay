@@ -38,6 +38,12 @@ function CostSummary({ cost }: { cost: EconomicEstimate }) {
 
 export function RulesAssessment({ decision }: { decision: DecisionEngineResponse }) {
   const proposal = decision.improvement
+  const limits = proposal?.constraintCheck
+  const proposalMessage = !proposal ? "No improvement proposal is saved for this version. Create a revised version to evaluate changes."
+    : proposal.status === "proposed" && !limits ? "This saved proposal predates fixed-limit checks. Regenerate the plan to evaluate it under your current limits."
+    : proposal.status === "needs_information" ? "More requirements are needed to check your limits. Review the input gaps and revise your requirements."
+    : proposal.status === "constraints_unsatisfied" ? "The tested changes did not produce a plan within your fixed limits. Review scope and cost assumptions; your budget and timeline have been preserved."
+    : "The tested changes did not produce a supported score improvement within your limits. Review the recommendations and try a specific revised scenario."
   if (!decision.rulesVersion) return null
 
   return (
@@ -63,13 +69,25 @@ export function RulesAssessment({ decision }: { decision: DecisionEngineResponse
         <Card className="min-w-0 border-white/10 bg-slate-950/75">
           <CardHeader><CardTitle className="text-base">Proposed plan improvement</CardTitle></CardHeader>
           <CardContent className="space-y-4">
-            {proposal?.status === "proposed" && proposal.assessment ? (
+            {limits && <div className="rounded-lg border border-white/15 p-4 text-sm leading-6 text-slate-300">
+              <p className="font-semibold text-slate-100">{limits.fixedFields.length ? `Fixed limits: ${limits.fixedFields.map((field) => field.replaceAll("_", " ")).join(", ")}` : "No fields are locked. Proposed changes require your review."}</p>
+              {limits.budgetCeiling != null && <p>Budget ceiling: {amount(limits.budgetCeiling, decision.economics?.currency ?? decision.structuredFields.currency ?? "USD")}</p>}
+              {limits.timelineCeilingMonths != null && <p>Timeline limit: {limits.timelineCeilingMonths} months</p>}
+              {limits.deadlineDate && <p>Plan deadline: {new Date(limits.deadlineDate).toLocaleDateString("en-US", { timeZone: "UTC", year: "numeric", month: "short", day: "numeric" })}</p>}
+              {!!limits.reasons.length && <ul className="mt-2 list-disc space-y-1 pl-5 text-amber-200">{limits.reasons.map((reason) => <li key={reason}>{reason}</li>)}</ul>}
+            </div>}
+            {proposal?.status === "proposed" && proposal.assessment && limits?.estimatesWithinLimits ? (
               <>
                 <p className="text-2xl font-semibold text-slate-100">
                   {decision.feasibilityScore.toFixed(1)} → {proposal.assessment.feasibilityScore.toFixed(1)} / 100
                   <span className="ml-3 inline-block text-base text-emerald-300">+{proposal.scoreDelta.toFixed(1)} points</span>
                 </p>
                 <p className="text-sm leading-6 text-slate-300">{proposal.notice}</p>
+                <p className="text-sm leading-6 text-slate-300">
+                  {proposal.assessment.economics && <>Proposed delivery cost: {amount(proposal.assessment.economics.estimatedCost, proposal.assessment.economics.currency)}. </>}
+                  {proposal.plan && <>Proposed timeline: {proposal.plan.timelineMonths} months. </>}
+                  Estimates pass the listed limits under the recorded assumptions.
+                </p>
                 <dl className="space-y-3">
                   {proposal.changes.map((change) => (
                     <div key={change.field} className="rounded-lg border border-white/15 p-4 text-sm leading-6">
@@ -98,7 +116,7 @@ export function RulesAssessment({ decision }: { decision: DecisionEngineResponse
                 )}
               </>
             ) : (
-              <p className="text-sm leading-6 text-slate-300">{!proposal ? "No improvement proposal is saved for this version. Create a revised version to evaluate changes." : proposal.status === "needs_information" ? "More requirements are needed before these rules can support an improvement. Review the missing fields and revise your input." : "The tested changes did not produce a supported score improvement. Review the recommendations and try a specific revised scenario."}</p>
+              <p className="text-sm leading-6 text-slate-300">{proposalMessage}</p>
             )}
           </CardContent>
         </Card>
