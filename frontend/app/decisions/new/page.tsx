@@ -55,7 +55,9 @@ export default function NewDecisionPage() {
       router.push(`/decisions/${result.decisionId}/analytics`)
     } catch (requestError) {
       const message = axios.isAxiosError(requestError)
-        ? requestError.response?.data?.message ?? "The decision could not be analyzed."
+        ? requestError.response?.data?.message ??
+          requestError.response?.data?.Message ??
+          "The decision could not be analyzed."
         : "The decision could not be analyzed."
       setError(message)
     } finally {

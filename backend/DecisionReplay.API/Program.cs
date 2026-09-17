@@ -5,6 +5,7 @@ using DecisionReplay.Application.Services;
 using DecisionReplay.Infrastructure.Persistence.Mongo;
 using DecisionReplay.Infrastructure.Persistence.Repositories;
 using DecisionReplay.Infrastructure.Services;
+using DecisionReplay.Domain.ValueObjects;
 using DotNetEnv;
 using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
@@ -12,10 +13,11 @@ using Microsoft.IdentityModel.Tokens;
 using MongoDB.Driver;
 
 var envPath = Path.Combine(Directory.GetCurrentDirectory(), "..", ".env");
-if (File.Exists(envPath)) Env.Load(envPath);
-else Env.Load();
+if (File.Exists(envPath)) Env.NoClobber().Load(envPath);
+else Env.NoClobber().Load();
 
-var builder = WebApplication.CreateBuilder(args);
+var checkOllama = args.Contains("--check-ollama");
+var builder = WebApplication.CreateBuilder(args.Where(arg => arg != "--check-ollama").ToArray());
 builder.Logging.ClearProviders();
 builder.Logging.AddConsole();
 builder.Services.AddDataProtection().UseEphemeralDataProtectionProvider();
@@ -26,6 +28,38 @@ builder.Services.AddResponseCompression(options => options.EnableForHttps = true
 builder.Services.AddExceptionHandler<GlobalExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddHttpClient();
+builder.Services.AddScoped<OllamaLanguageService>();
+
+// Run the same Ollama client in the API's runtime, without database or auth dependencies.
+if (checkOllama)
+{
+    await using var checkApp = builder.Build();
+    using var scope = checkApp.Services.CreateScope();
+    var ollama = scope.ServiceProvider.GetRequiredService<OllamaLanguageService>();
+    var availability = await ollama.CheckAvailabilityAsync();
+    Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(availability));
+    if (availability.Status != "healthy")
+    {
+        Environment.ExitCode = 1;
+        return;
+    }
+    var answer = await ollama.SummarizeReplayAsync(new ReplayComparison
+    {
+        PreviousVersion = 1,
+        NewVersion = 2,
+        ScoreDelta = 0,
+        RiskDelta = "unchanged",
+        MainReason = "Smoke check: no plan inputs were changed."
+    });
+    if (string.IsNullOrWhiteSpace(answer))
+    {
+        Console.Error.WriteLine("Ollama inference failed; inspect the explicit failure log above.");
+        Environment.ExitCode = 1;
+        return;
+    }
+    Console.WriteLine($"Ollama inference succeeded: {answer}");
+    return;
+}
 
 MongoDbConfiguration.Configure();
 var mongoSettings = new MongoSettings
@@ -56,7 +90,8 @@ else
 builder.Services.AddScoped<IUserRepository, UserRepository>();
 builder.Services.AddScoped<IAuthService, AuthService>();
 
-builder.Services.AddScoped<IAiLanguageService, GroqLanguageService>();
+builder.Services.AddScoped<GroqLanguageService>();
+builder.Services.AddScoped<IAiLanguageService, HybridLanguageService>();
 builder.Services.AddSingleton<DomainTemplateService>();
 builder.Services.AddScoped<DecisionParserService>();
 builder.Services.AddScoped<DecisionValidationService>();

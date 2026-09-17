@@ -51,6 +51,32 @@ public sealed class FeasibilityScoringServiceTests
     }
 
     [Fact]
+    public void InvalidExtractedRequiredValues_BecomeImprovementGapsNotErrors()
+    {
+        var template = _templates.Get("project_planning");
+        var decision = new StructuredDecisionData
+        {
+            Domain = "project_planning",
+            Goal = "Improve a student registration platform",
+            Fields = new Dictionary<string, string>
+            {
+                ["project_goal"] = "Improve a student registration platform",
+                ["budget"] = "$5,000",
+                ["timeline_months"] = "first semester",
+                ["team_size"] = "4",
+                ["scope"] = "club registration, ticket generation, QR attendance"
+            }
+        };
+
+        var validation = _validation.Validate(decision, template);
+
+        Assert.Empty(validation.Errors);
+        Assert.Contains("timeline_months", validation.MissingFields);
+        Assert.Contains(validation.Warnings, warning =>
+            warning.Contains("timeline_months", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
     public void FactorWeights_SumToOneForEveryTemplate()
     {
         foreach (var template in _templates.GetAll())
