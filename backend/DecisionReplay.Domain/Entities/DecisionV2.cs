@@ -16,8 +16,11 @@ public sealed class DecisionV2
     public string DomainType { get; set; } = string.Empty;
     public string OriginalInput { get; set; } = string.Empty;
     public int CurrentVersion { get; set; }
+    public long Revision { get; set; }
     public List<DecisionVersion> Versions { get; set; } = new();
     public List<AuditTrailEntry> AuditTrail { get; set; } = new();
+    public List<RecordedOutcome> RecordedOutcomes { get; set; } = new();
+    public List<ReplayScenario> ReplayScenarios { get; set; } = new();
     public DecisionStatus Status { get; set; } = DecisionStatus.Draft;
     public DecisionOutcome Outcome { get; set; } = DecisionOutcome.Draft;
     public DateTime CreatedAt { get; set; }

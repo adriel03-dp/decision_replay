@@ -122,4 +122,6 @@ public sealed class DecisionVersion
     public ActionPlan? Plan { get; set; }
     public string Explanation { get; set; } = string.Empty;
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
+    public DecisionContextSnapshot? Context { get; set; }
+    public List<ReplayAnalysisRecord> AiAnalyses { get; set; } = new();
 }

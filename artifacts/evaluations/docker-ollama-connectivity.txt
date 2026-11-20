@@ -1,0 +1,4 @@
+{"Status":"healthy","Provider":"ollama","Model":"qwen2.5-coder:3b","Error":null,"ModelRevision":"f72c60cabf6237b07f6e632b2c48d533cef25eda2efbd34bed21c5e9c01e6225"}
+Ollama inference succeeded. ExecutionId=4a48d05a-346c-4339-aefd-12b3afa07fd9
+info: DecisionReplay.Application.Services.AiWorkflowService[0]
+      AI execution 4a48d05a-346c-4339-aefd-12b3afa07fd9 Operation=replay-summary Prompt=v1 Status=succeeded LatencyMs=62598.8907 Retries=0

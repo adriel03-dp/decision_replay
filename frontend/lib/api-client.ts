@@ -2,10 +2,11 @@ import axios from 'axios';
 
 // auth-context uses NEXT_PUBLIC_API_URL with /api suffix; api-client strips it so paths like /api/v2/... resolve correctly
 const API_BASE_URL = (process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api').replace(/\/api\/?$/, '');
+const configuredTimeout = Number(process.env.NEXT_PUBLIC_API_TIMEOUT_MS);
 
 export const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 60000,
+  timeout: Number.isFinite(configuredTimeout) && configuredTimeout >= 1000 ? configuredTimeout : 900000,
   headers: {
     'Content-Type': 'application/json',
   },

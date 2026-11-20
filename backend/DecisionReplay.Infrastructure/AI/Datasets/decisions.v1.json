@@ -1,0 +1,264 @@
+{
+  "hash": "",
+  "cases": [
+    {
+      "expectedAlternativeConcepts": [
+        [
+          "pilot",
+          "smaller"
+        ],
+        [
+          "delay",
+          "wait",
+          "postpone"
+        ]
+      ],
+      "id": "decision-001",
+      "expectedRiskConcepts": [
+        [
+          "demand",
+          "paying",
+          "conversion"
+        ],
+        [
+          "budget",
+          "funding",
+          "capital",
+          "cost"
+        ]
+      ],
+      "expectedMissingInformation": [
+        [
+          "price",
+          "pricing",
+          "willingness to pay"
+        ],
+        [
+          "cost",
+          "costs",
+          "economics"
+        ]
+      ],
+      "context": {
+        "provenance": "manually authored evaluation fixture",
+        "decisionAt": "2025-01-15T10:00:00Z",
+        "constraints": [
+          {
+            "id": "c1",
+            "text": "Funding is capped at 60000 and no additional team members are available",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "assumptions": [
+          {
+            "id": "a1",
+            "text": "Interview interest will turn into paying demand",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "fields": {
+          "budget": "60000",
+          "timeline_months": "3",
+          "market_evidence": "low",
+          "team_size": "2",
+          "target_market": "local shops"
+        },
+        "evidence": [
+          {
+            "id": "e1",
+            "text": "Five local shops said they might try delivery. None has paid or signed a contract.",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "chosenAction": "Launch a small delivery pilot",
+        "expectedOutcome": "Validate paying demand before committing all capital",
+        "alternatives": [
+          "Run a smaller paid pilot",
+          "Delay launch until demand is validated"
+        ],
+        "decisionText": "Decide whether to launch a delivery startup in three months."
+      }
+    },
+    {
+      "expectedAlternativeConcepts": [
+        [
+          "employed",
+          "employment",
+          "current job"
+        ],
+        [
+          "learn",
+          "study",
+          "portfolio",
+          "training",
+          "skills"
+        ]
+      ],
+      "id": "decision-002",
+      "expectedRiskConcepts": [
+        [
+          "savings",
+          "runway",
+          "financial",
+          "expenses"
+        ],
+        [
+          "skills",
+          "experience",
+          "readiness",
+          "competency"
+        ]
+      ],
+      "expectedMissingInformation": [
+        [
+          "demand",
+          "market",
+          "hiring"
+        ],
+        [
+          "skills",
+          "skill",
+          "competency",
+          "requirements"
+        ]
+      ],
+      "context": {
+        "provenance": "manually authored evaluation fixture",
+        "decisionAt": "2025-01-15T10:00:00Z",
+        "constraints": [
+          {
+            "id": "c1",
+            "text": "Family expenses cannot be suspended",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "assumptions": [
+          {
+            "id": "a1",
+            "text": "A suitable role can be obtained within six months",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "fields": {
+          "timeline_months": "6",
+          "savings_months": "2",
+          "current_role": "software developer",
+          "target_role": "AI engineer",
+          "skill_readiness": "partial",
+          "market_demand": "unknown"
+        },
+        "evidence": [
+          {
+            "id": "e1",
+            "text": "Savings cover two months of expenses. No job offer has been received.",
+            "knownAt": "2025-01-15T10:00:00Z"
+          },
+          {
+            "id": "e2",
+            "text": "One small ML portfolio project is complete, with no production ML experience.",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "chosenAction": "Seek a new role while employed",
+        "expectedOutcome": "Transition without exhausting savings",
+        "alternatives": [
+          "Apply while employed",
+          "Resign and study full time"
+        ],
+        "decisionText": "Decide whether to resign now to seek an AI engineering role"
+      }
+    },
+    {
+      "expectedAlternativeConcepts": [
+        [
+          "phase",
+          "phased",
+          "staged",
+          "incremental",
+          "scope"
+        ],
+        [
+          "delay",
+          "later",
+          "extend",
+          "negotiate"
+        ]
+      ],
+      "id": "decision-003",
+      "expectedRiskConcepts": [
+        [
+          "dependency",
+          "dependencies",
+          "supplier",
+          "API"
+        ],
+        [
+          "schedule",
+          "timeline",
+          "capacity",
+          "deadline"
+        ]
+      ],
+      "expectedMissingInformation": [
+        [
+          "acceptance",
+          "criteria",
+          "requirements"
+        ],
+        [
+          "supplier",
+          "dependency",
+          "API",
+          "delivery date"
+        ]
+      ],
+      "context": {
+        "provenance": "manually authored evaluation fixture",
+        "decisionAt": "2025-01-15T10:00:00Z",
+        "constraints": [
+          {
+            "id": "c1",
+            "text": "Team capacity is fixed and the target is four months",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "assumptions": [
+          {
+            "id": "a1",
+            "text": "The external identity API will be ready before integration",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "fields": {
+          "project_goal": "customer portal",
+          "timeline_months": "4",
+          "scope": "login, reporting",
+          "team_size": "2",
+          "technical_readiness": "partial",
+          "budget": "100000",
+          "dependencies": "external identity API"
+        },
+        "evidence": [
+          {
+            "id": "e1",
+            "text": "Two developers are allocated. The identity API supplier has not confirmed its delivery date.",
+            "knownAt": "2025-01-15T10:00:00Z"
+          },
+          {
+            "id": "e2",
+            "text": "Customers requested login and reporting; acceptance criteria are not agreed.",
+            "knownAt": "2025-01-15T10:00:00Z"
+          }
+        ],
+        "chosenAction": "Deliver a reduced scope portal in four months",
+        "expectedOutcome": "Provide login and reporting for pilot customers",
+        "alternatives": [
+          "Phase the release",
+          "Negotiate a later delivery date"
+        ],
+        "decisionText": "Decide whether to commit to a customer portal delivery date"
+      }
+    }
+  ],
+  "version": "v1"
+}

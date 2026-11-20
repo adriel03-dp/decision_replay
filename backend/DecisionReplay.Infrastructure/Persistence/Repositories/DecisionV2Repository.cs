@@ -1,5 +1,6 @@
 using DecisionReplay.Application.Interfaces;
 using DecisionReplay.Domain.Entities;
+using DecisionReplay.Domain.ValueObjects;
 using DecisionReplay.Infrastructure.Persistence.Mongo;
 using MongoDB.Driver;
 
@@ -56,10 +57,18 @@ public sealed class DecisionV2Repository : IDecisionV2Repository
 
     public async Task UpdateAsync(DecisionV2 decision)
     {
-        await _decisions.ReplaceOneAsync(
-            d => d.Id == decision.Id,
-            decision
-        );
+        var expectedRevision = decision.Revision;
+        decision.Revision++;
+        var filter = Builders<DecisionV2>.Filter.Where(d => d.Id == decision.Id && d.CreatedBy == decision.CreatedBy)
+            & (expectedRevision == 0
+                ? Builders<DecisionV2>.Filter.Or(Builders<DecisionV2>.Filter.Eq(d => d.Revision, 0), Builders<DecisionV2>.Filter.Exists("revision", false))
+                : Builders<DecisionV2>.Filter.Eq(d => d.Revision, expectedRevision));
+        var result = await _decisions.ReplaceOneAsync(filter, decision);
+        if (result.MatchedCount == 0)
+        {
+            decision.Revision = expectedRevision;
+            throw new DecisionConflictException();
+        }
     }
 
     public async Task DeleteAsync(Guid decisionId)
