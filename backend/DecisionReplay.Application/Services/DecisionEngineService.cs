@@ -18,6 +18,7 @@ public sealed class DecisionEngineService
     private readonly IAiLanguageService _languageService;
     private readonly IDecisionV2Repository _repository;
     private readonly AiExecutionScope? _executions;
+    private readonly ImprovementPlanningService _improvements;
 
     public DecisionEngineService(
         DecisionParserService parser,
@@ -30,7 +31,8 @@ public sealed class DecisionEngineService
         AuditTrailService audit,
         IAiLanguageService languageService,
         IDecisionV2Repository repository,
-        AiExecutionScope? executions = null)
+        AiExecutionScope? executions = null,
+        ImprovementPlanningService? improvements = null)
     {
         _parser = parser;
         _validation = validation;
@@ -43,12 +45,26 @@ public sealed class DecisionEngineService
         _languageService = languageService;
         _repository = repository;
         _executions = executions;
+        _improvements = improvements ?? new(validation, scoring);
     }
 
     public async Task<DecisionV2> AnalyzeAndCreateAsync(
         string naturalLanguageInput,
         string userId,
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<string>? fixedFields = null)
+        => await CreateAsync(naturalLanguageInput, userId, null, cancellationToken, fixedFields);
+
+    public Task<DecisionV2> AnalyzeStructuredAndCreateAsync(StructuredDecisionData structured, string userId,
         CancellationToken cancellationToken = default)
+    {
+        if (!_templates.IsSupported(structured.Domain)) throw new ArgumentException("Unsupported decision domain.");
+        if (string.IsNullOrWhiteSpace(structured.Goal)) throw new ArgumentException("A goal is required.");
+        return CreateAsync(structured.Goal.Trim(), userId, structured, cancellationToken);
+    }
+
+    private async Task<DecisionV2> CreateAsync(string naturalLanguageInput, string userId,
+        StructuredDecisionData? structured, CancellationToken cancellationToken, IReadOnlyCollection<string>? fixedFields = null)
     {
         var decisionId = Guid.NewGuid();
         if (_executions != null) _executions.Context = _executions.Context with { OwnerId = userId, DecisionId = decisionId };
@@ -56,7 +72,7 @@ public sealed class DecisionEngineService
             decisionId,
             1,
             naturalLanguageInput,
-            cancellationToken);
+            cancellationToken, structured, fixedFields);
         var decision = new DecisionV2(
             decisionId,
             naturalLanguageInput,
@@ -111,7 +127,8 @@ public sealed class DecisionEngineService
         Guid decisionId,
         string updatedInput,
         string userId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default,
+        IReadOnlyCollection<string>? fixedFields = null)
     {
         var decision = await _repository.GetByIdForUserAsync(decisionId, userId)
             ?? throw new KeyNotFoundException("Decision not found.");
@@ -123,7 +140,9 @@ public sealed class DecisionEngineService
             decision.Id,
             previous.Version + 1,
             updatedInput,
-            cancellationToken);
+            cancellationToken, fixedFields: fixedFields,
+            inheritedFixedFields: ImprovementConstraintPolicy.Resolve(previous.StructuredData, _templates.Get(previous.StructuredData.Domain)),
+            inheritedPlanStartDate: previous.Plan?.StartDate ?? previous.CreatedAt.Date);
         decision.AddVersion(next);
 
         var template = _templates.Get(next.StructuredData.Domain);
@@ -165,13 +184,19 @@ public sealed class DecisionEngineService
         version.AiAnalyses = new();
         if (_executions != null) _executions.Context = _executions.Context with { OwnerId = userId, DecisionId = decisionId, ContextVersion = version.Version };
         var template = _templates.Get(version.StructuredData.Domain);
+        version.Validation = _validation.Validate(version.StructuredData, template);
+        version.Feasibility = _scoring.Calculate(version.StructuredData, template, version.Validation);
+        var anchoredStart = ImprovementConstraintPolicy.Resolve(version.StructuredData, template).Contains("timeline_months")
+            ? previous.Plan?.StartDate ?? previous.CreatedAt.Date : (DateTime?)null;
         version.Plan = await _plans.GenerateAsync(
             decision.Id,
             version.Version,
             version.StructuredData,
             template,
             version.Feasibility,
-            cancellationToken);
+            cancellationToken, anchoredStart);
+        version.Improvement = await _improvements.ProposeAsync(decision.Id, version.Version,
+            version.StructuredData, template, version.Feasibility, cancellationToken, version.Plan.StartDate);
         decision.AddVersion(version);
         decision.AuditTrail.Add(_audit.Create(
             AuditActionType.PlanGenerated,
@@ -200,12 +225,19 @@ public sealed class DecisionEngineService
         Guid decisionId,
         int versionNumber,
         string naturalLanguageInput,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        StructuredDecisionData? supplied = null,
+        IReadOnlyCollection<string>? fixedFields = null,
+        IReadOnlyCollection<string>? inheritedFixedFields = null,
+        DateTime? inheritedPlanStartDate = null)
     {
+        cancellationToken.ThrowIfCancellationRequested();
         if (_executions != null) _executions.Context = _executions.Context with { ContextVersion = versionNumber };
-        var structured = await _parser.ParseAsync(naturalLanguageInput, cancellationToken);
+        var structured = supplied ?? await _parser.ParseAsync(naturalLanguageInput, cancellationToken);
         var template = _templates.Get(structured.Domain);
         structured.Domain = template.Domain;
+        if (supplied == null)
+            ImprovementConstraintPolicy.ApplyTextPolicy(structured, template, naturalLanguageInput, fixedFields, inheritedFixedFields);
 
         var validation = _validation.Validate(structured, template);
         if (validation.Errors.Count > 0)
@@ -213,13 +245,15 @@ public sealed class DecisionEngineService
 
         structured.MissingFields = validation.MissingFields;
         var feasibility = _scoring.Calculate(structured, template, validation);
+        var anchoredStart = ImprovementConstraintPolicy.Resolve(structured, template).Contains("timeline_months")
+            ? inheritedPlanStartDate : null;
         var plan = await _plans.GenerateAsync(
             decisionId,
             versionNumber,
             structured,
             template,
             feasibility,
-            cancellationToken);
+            cancellationToken, anchoredStart);
         var explanation = await _explanation.ExplainAsync(
             structured,
             feasibility,
@@ -234,6 +268,7 @@ public sealed class DecisionEngineService
             Feasibility = feasibility,
             Plan = plan,
             Explanation = explanation,
+            Improvement = await _improvements.ProposeAsync(decisionId, versionNumber, structured, template, feasibility, cancellationToken, plan.StartDate),
             CreatedAt = DateTime.UtcNow
         };
         version.Context = ReplayContextService.Snapshot(version);

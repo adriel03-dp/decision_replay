@@ -40,6 +40,7 @@ builder.Services.AddDecisionReplayAi(aiConfiguration);
 builder.Services.AddSingleton<DomainTemplateService>();
 builder.Services.AddScoped<DecisionValidationService>();
 builder.Services.AddScoped<FeasibilityScoringService>();
+builder.Services.AddScoped<ImprovementPlanningService>();
 
 // Run the same Ollama client in the API's runtime, without database or auth dependencies.
 if (checkOllama || evaluate)

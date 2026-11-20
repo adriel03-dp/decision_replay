@@ -3,9 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "build": "next build",
+    "build": "next build --webpack",
     "preview": "npm run build && npm run start",
-    "dev": "next dev --port 3002",
+    "dev": "next dev --webpack --port 3002",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "start": "next start --port 3002"

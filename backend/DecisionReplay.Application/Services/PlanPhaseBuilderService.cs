@@ -7,6 +7,7 @@ public sealed class PlanPhaseBuilderService
     public IReadOnlyList<PlanPhase> Build(double timelineMonths, DateTime startDate)
     {
         var totalWeeks = Math.Max(1, (int)Math.Round(timelineMonths * 4.345));
+        var deadline = DeliveryScheduleRules.EndDate(startDate, timelineMonths);
         var definitions = timelineMonths <= 3
             ? ShortPlan()
             : timelineMonths <= 8
@@ -31,7 +32,7 @@ public sealed class PlanPhaseBuilderService
                 StartWeek = cursor,
                 EndWeek = endWeek,
                 StartDate = startDate.AddDays((cursor - 1) * 7),
-                EndDate = startDate.AddDays(endWeek * 7 - 1),
+                EndDate = new DateTime(Math.Min(startDate.AddDays(endWeek * 7 - 1).Ticks, deadline.Ticks), deadline.Kind),
                 Goal = definition.Goal
             });
 

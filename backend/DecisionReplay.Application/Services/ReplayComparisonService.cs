@@ -36,6 +36,9 @@ public sealed class ReplayComparisonService
             PlanChanges = ComparePlans(previous.Plan, current.Plan)
         };
         comparison.MainReason = BuildMainReason(comparison, previous, current);
+        if (!string.Equals(previous.Feasibility.RulesVersion, current.Feasibility.RulesVersion, StringComparison.Ordinal))
+            comparison.MainReason = $"Scoring rules changed from {previous.Feasibility.RulesVersion} to {current.Feasibility.RulesVersion}. " +
+                "The recorded score delta includes methodology changes; recompute both inputs under the same rules before attributing it to plan improvements.";
         return comparison;
     }
 

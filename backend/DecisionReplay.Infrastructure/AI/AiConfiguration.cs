@@ -6,7 +6,7 @@ namespace DecisionReplay.Infrastructure.AI;
 
 public sealed class AiConfiguration
 {
-    public string Provider { get; init; } = "hybrid";
+    public string Provider { get; init; } = "none";
     public string? ExtractionProvider { get; init; }
     public string? Model { get; init; }
     public string OllamaBaseUrl { get; init; } = "";
@@ -48,7 +48,7 @@ public sealed class AiConfiguration
             throw new InvalidOperationException("Set both AI_FALLBACK_PROVIDER and AI_FALLBACK_MODEL, or neither.");
         return new AiConfiguration
         {
-            Provider = (Read("AI_PROVIDER") ?? "hybrid").ToLowerInvariant(),
+            Provider = (Read("AI_PROVIDER") ?? "none").ToLowerInvariant(),
             ExtractionProvider = Read("AI_EXTRACTION_PROVIDER")?.ToLowerInvariant() is { Length: > 0 } extraction ? extraction : null,
             Model = Read("AI_MODEL") is { Length: > 0 } model ? model : null,
             OllamaBaseUrl = Read("OLLAMA_BASE_URL") ?? "",
@@ -68,6 +68,7 @@ public sealed class AiConfiguration
 
     public AiTarget Target(string operation)
     {
+        if (Provider == "none") return new("none", "none");
         var provider = operation == "extraction" && ExtractionProvider != null ? ExtractionProvider
             : Provider == "hybrid" ? operation == "extraction" ? "groq" : "ollama" : Provider;
         var model = Provider == provider && Model != null ? Model : provider == "ollama" ? OllamaModel : GroqModel;
@@ -92,6 +93,12 @@ public sealed class AiConfiguration
 
     public void ValidateSelectedProviders()
     {
+        if (Provider == "none")
+        {
+            if (Fallback != null || ExtractionProvider != null || InteractiveWording)
+                throw new InvalidOperationException("AI_PROVIDER=none cannot enable fallback, extraction overrides or interactive AI wording.");
+            return;
+        }
         if (Provider is not ("hybrid" or "ollama" or "groq")) throw new InvalidOperationException("Unknown AI_PROVIDER.");
         ValidateTarget(Target("extraction"));
         ValidateTarget(Target("decision-analysis"));

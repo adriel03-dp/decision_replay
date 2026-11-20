@@ -2,7 +2,7 @@
 
 Decision Replay preserves the information available when a decision was made, then lets you examine changed assumptions and compare the eventual outcome separately. Decision quality and outcome quality are different: a reasonable process can have an unfortunate outcome.
 
-The existing domain engine still owns feasibility scores, risk classification, recommendations, action-plan structure and exports. AI extracts fields and supplies validated advisory analysis; it cannot change those deterministic results. This is a decision workflow, rather than a general chatbot.
+The domain engine owns feasibility scores, risk classification, recommendations, action-plan structure and exports. **Core workflows now default to rules-only operation (`AI_PROVIDER=none`)**, including explicit requirement extraction, cost estimates and scored improvement proposals. Optional AI can extract fields and supply advisory analysis when deliberately enabled. See [current project context and rework](docs/project-context.md) for the refresher, provider details and limitations.
 
 ## Architecture
 
@@ -11,9 +11,10 @@ flowchart TD
   UI[Next.js / React] --> API[ASP.NET Core API / JWT]
   API --> APP[Application services]
   APP --> DOMAIN[Domain templates / scoring / replay / plans]
-  APP --> FLOW[Validated AI workflow]
+  APP --> RULES[Explicit field parser / delivery cost rules / scored proposals]
+  APP -. Optional .-> FLOW[Validated AI workflow]
   FLOW --> PORT[IAiProvider / provider resolver]
-  PORT --> GROQ[Groq: extraction by default]
+  PORT --> GROQ[Groq: opt-in cloud extraction]
   PORT --> OLLAMA[Decision Replay Ollama: analysis and wording]
   APP --> DB[(MongoDB)]
 ```
@@ -24,7 +25,15 @@ The backend has Domain, Application, Infrastructure and API projects. Provider-s
 
 Copy `backend/.env.example` to `backend/.env` and `frontend/.env.example` to `frontend/.env.local`. Supply MongoDB and a random JWT secret of at least 32 characters. Keep these files private. Runtime environment variables take precedence over dotenv values.
 
-Default `AI_PROVIDER=hybrid` keeps **Groq extraction**, using `GROQ_API_KEY` and an explicitly configured, account-accessible `GROQ_MODEL`, and uses Ollama for other operations. `AI_PROVIDER=ollama` enables all-local extraction and analysis without a cloud key; `AI_PROVIDER=groq` selects cloud inference throughout. `AI_EXTRACTION_PROVIDER` optionally overrides extraction routing. `AI_MODEL` overrides the model only in a single-provider mode. Provider secrets never reach the frontend.
+Default `AI_PROVIDER=none` needs no AI key, model or Ollama server. The parser recognizes explicit budget, month count, team size and labelled template fields; unsupported prose remains a visible information gap. `POST /api/v2/decisions/analyze-structured` accepts a domain, goal, title and field dictionary and bypasses AI extraction in every mode. The existing context editor provides structured revisions.
+
+Opt-in `AI_PROVIDER=hybrid` uses **Groq** (not xAI Grok) for extraction, with `GROQ_API_KEY` and an explicitly configured, account-accessible `GROQ_MODEL`, and Ollama for other operations. `AI_PROVIDER=ollama` enables all-local inference; `AI_PROVIDER=groq` selects cloud inference throughout. `AI_EXTRACTION_PROVIDER` optionally overrides extraction routing in enabled modes. `AI_MODEL` overrides the model only in a single-provider mode. Provider secrets never reach the frontend. Rules-only mode rejects explicit AI requests, including manually selected evaluation targets.
+
+Rules v2.0 expose delivery cost, funding gap, runway and assumptions for project, product and startup domains. **Budget and timeline are fixed by default.** Proposed improvements must keep locked inputs unchanged and fit the estimated cost and effort within those limits. A higher score is insufficient if a fixed limit is violated. Whole-month deadlines use calendar months, and plan phases and milestones cannot run past the inclusive end date. Replay and regeneration preserve the original start date while the timeline remains fixed.
+
+The creation form lets users unlock budget or timeline explicitly and optionally lock every scope item. Text analysis/replay accepts `fixedFields: ["budget", "timeline_months", "scope"]` as authoritative request metadata; an empty array unlocks all fields. Structured entry/context uses a `fixed_fields` field containing comma-separated template names, or `none` for explicit flexibility. Text input also supports the `fixed_fields:` label. Request metadata takes precedence over text labels, replay inherits previous locks when no override is supplied, and AI output cannot unlock them.
+
+Proposals include changed inputs, tradeoffs, applied constraint checks and a separate plan while retaining the original version. `constraints_unsatisfied` means the tested changes could not fit the fixed limits; `needs_information` means a limit could not be verified. Saved proposals predating constraint checks must be regenerated before the UI presents them as supported improvements. An improvement is not guaranteed. All scores are heuristic feasibility indices, **not calibrated probabilities of success**.
 
 Decision Replay owns a separate Ollama container, reachable on host port **11435**. It reuses the installed model files through a **read-only external volume mount**; it does not download weights or use sovereign-dev's Ollama server. The existing model volume must remain available, but that project's server does not need to run. Decision Replay keeps its own writable runtime state in a separate volume.
 
@@ -65,7 +74,7 @@ From the repository root, copy `.env.example` to `.env` if you need Compose over
 docker compose up --build
 ```
 
-Compose manages this project's frontend, backend, MongoDB and dedicated Ollama runtime. The backend reaches Ollama at `http://ollama:11434` inside its own Docker network. Start just the local model server for native development with `docker compose up -d --pull never ollama`. `OLLAMA_MODEL_VOLUME` selects the already-populated external model volume (currently `sovereign-dev_ollama-data`). The external volume is never removed by this project's Compose lifecycle commands. Frontend port defaults to **3002** to avoid sovereign-dev on 3000 and Langfuse on 3001; backend uses 5000 and Mongo uses 27017. Adjust conflicting host ports before starting. Application images contain dependencies and compiled code, never model weights. Do not run lifecycle commands against the sovereign-dev project from here.
+Compose manages this project's frontend, backend and MongoDB. Ollama is optional under the `ai` profile, so rules-only startup needs no model volume or inference server. To enable local AI, set `AI_PROVIDER=ollama` (or `hybrid` with Groq credentials) in the root `.env` and run `docker compose --profile ai up --build`. The backend reaches Ollama at `http://ollama:11434`. Start only the local server for native development with `docker compose --profile ai up -d --pull never ollama`. `OLLAMA_MODEL_VOLUME` selects the already-populated external model volume (currently `sovereign-dev_ollama-data`); it is never removed by this project's Compose lifecycle commands. Frontend port defaults to **3002**, backend to 5000 and Mongo to 27017. Application images contain compiled code and dependencies, never model weights. Do not run lifecycle commands against the sovereign-dev project from here.
 
 CPU inference is supported. In the observed environment, the loaded Q4 model occupied approximately 2.3 GiB in Ollama and used no VRAM; several analyses exceeded 120 seconds. Allow memory for the OS, Mongo and both applications as well. An 8 GiB machine can be tight; 16 GiB provides more headroom. These are planning estimates, not guaranteed minimum requirements. Increase the configurable timeout for a slow CPU if appropriate; keep inference sequential because resources are shared.
 
@@ -109,10 +118,11 @@ Metrics measure structured validity, keyword-based missing-information/risk/alte
 
 The AI Lab runs cases/models sequentially, displays per-case output and compares experiments only when dataset, prompt, parameters, timeout/retry budgets and output-contract version match. Benchmark provider fallback is disabled to keep model identity honest. Token counts are reported only when supplied by the provider. API cost is unknown/null until a real accounting mechanism exists; local inference has infrastructure and hardware costs even without an API charge. System resource usage is not currently sampled automatically.
 
-Run evaluation through the same backend runtime without Mongo or cloud credentials:
+When deliberately enabling local AI, run evaluation through the same backend runtime without Mongo or cloud credentials:
 
 ```powershell
 cd backend/DecisionReplay.API
+$env:AI_PROVIDER = "ollama"
 dotnet run -- --evaluate --evaluation-provider=ollama --evaluation-model=qwen2.5-coder:3b --prompt-version=v3 --evaluation-output=../../artifacts/evaluations/my-run.json
 ```
 

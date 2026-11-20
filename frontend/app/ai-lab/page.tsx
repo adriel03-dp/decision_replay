@@ -29,6 +29,7 @@ export default function AiLabPage() {
   const [running, setRunning] = useState(false)
   const [inspecting, setInspecting] = useState(false)
   const [comparing, setComparing] = useState(false)
+  const aiDisabled = configuration?.analysis.provider === "none"
 
   async function refresh() {
     const [runs, requests] = await Promise.all([aiApi.experiments(), aiApi.executions()])
@@ -48,6 +49,7 @@ export default function AiLabPage() {
 
   function fail(error: unknown) { setError(axios.isAxiosError(error) ? error.response?.data?.message ?? "The request failed." : "The request failed.") }
   async function evaluate() {
+    if (aiDisabled) return
     setError(""); setRunning(true)
     try { await aiApi.evaluate({ provider, model }, prompt); await refresh() } catch (e) { fail(e); await refresh().catch(() => undefined) } finally { setRunning(false) }
   }
@@ -61,16 +63,17 @@ export default function AiLabPage() {
         <p className="mt-3 max-w-3xl text-muted-foreground">Run controlled decision cases, inspect validated model output, and compare recorded results. Every value below comes from a saved execution.</p>
       </header>
       {error && <div role="alert" className="rounded-lg border border-destructive/40 p-4 text-destructive">{error}</div>}
+      {aiDisabled && <p className="rounded-lg border p-4 text-sm leading-6">Optional AI is disabled. Core assessments and plans use local rules. Saved experiments remain available to review.</p>}
       <p aria-live="polite" className="text-sm text-muted-foreground">{loading ? "Loading experiments…" : running ? "Evaluating three cases sequentially. Local inference may take several minutes. Keep this page open." : `${experiments.length} recorded experiments · extraction uses ${configuration?.extraction.provider ?? "the configured provider"}`}</p>
       <Card><CardHeader><CardTitle>Run a controlled experiment</CardTitle></CardHeader><CardContent className="space-y-5">
-        <div className="grid gap-4 sm:grid-cols-3"><div><Label htmlFor="provider">Provider</Label><select id="provider" className={selectClass} value={provider} disabled={running || loading} onChange={e => {
+        <div className="grid gap-4 sm:grid-cols-3"><div><Label htmlFor="provider">Provider</Label><select id="provider" className={selectClass} value={provider} disabled={running || loading || aiDisabled} onChange={e => {
           setProvider(e.target.value); const target = [configuration?.analysis, configuration?.extraction].find(item => item?.provider === e.target.value); setModel(target?.model ?? "")
-        }}><option value="ollama">Ollama / local</option><option value="groq">Groq / cloud</option></select></div>
+        }}>{aiDisabled && <option value="none">Disabled / rules only</option>}<option value="ollama">Ollama / local</option><option value="groq">Groq / cloud</option></select></div>
           <div><Label htmlFor="model">Model</Label><Input id="model" className="h-11" value={model} onChange={e => setModel(e.target.value)} disabled={running || loading} maxLength={200} /></div>
           <div><Label htmlFor="prompt">Analysis prompt</Label><select id="prompt" className={selectClass} value={prompt} disabled={running || loading} onChange={e => setPrompt(e.target.value)}>{configuration?.prompts.filter(item => item.operation === "decision-analysis").map(item => <option key={item.version}>{item.version}</option>)}</select></div>
         </div>
         <p className="text-sm text-muted-foreground">Golden dataset v1: startup demand, career transition, and portal delivery. Cloud runs need server-side credentials. Model downloads and provider fallback are disabled for benchmarks.</p>
-        <Button className="min-h-11" onClick={evaluate} disabled={running || loading || !model.trim()}>{running ? "Evaluation running…" : "Evaluate three golden cases"}</Button>
+        <Button className="min-h-11" onClick={evaluate} disabled={running || loading || aiDisabled || !model.trim()}>{running ? "Evaluation running…" : "Evaluate three golden cases"}</Button>
       </CardContent></Card>
 
       <section aria-labelledby="experiments-heading"><div className="mb-4 flex flex-wrap items-center justify-between gap-3"><h2 id="experiments-heading" className="text-xl font-semibold">Recorded experiments</h2><Button variant="outline" className="min-h-11" onClick={compare} disabled={selected.length < 2 || selected.length > 6 || comparing}>{comparing ? "Comparing…" : "Compare selected models"}</Button></div>

@@ -5,11 +5,16 @@ namespace DecisionReplay.Application.Services;
 
 public sealed class FeasibilityScoringService
 {
+    public const string CurrentRulesVersion = "2.0";
     public FeasibilityAssessment Calculate(
         StructuredDecisionData decision,
         DecisionDomainTemplate template,
         DecisionValidationResult validation)
     {
+        if (validation.Errors.Count > 0) throw new ArgumentException(string.Join(" ", validation.Errors));
+        decision = new StructuredDecisionData { Domain = decision.Domain, Goal = decision.Goal,
+            Fields = decision.Fields.Where(pair => !validation.InvalidFields.Contains(pair.Key, StringComparer.OrdinalIgnoreCase))
+                .ToDictionary(pair => pair.Key, pair => pair.Value, StringComparer.OrdinalIgnoreCase) };
         var factors = template.ScoringFactors
             .Select(factor => EvaluateFactor(decision, factor))
             .ToList();
@@ -28,7 +33,15 @@ public sealed class FeasibilityScoringService
             FactorBreakdown = factors,
             Risks = risks,
             Recommendations = recommendations,
-            CalculatedAt = DateTime.UtcNow
+            CalculatedAt = DateTime.UtcNow,
+            RulesVersion = CurrentRulesVersion,
+            Economics = template.Domain switch
+            {
+                "project_planning" => DeliveryCostRules.Estimate(decision, 7_000),
+                "product_launch" => DeliveryCostRules.Estimate(decision, 8_000),
+                "business_startup" => DeliveryCostRules.Estimate(decision, 3_500),
+                _ => null
+            }
         };
     }
 
@@ -36,10 +49,12 @@ public sealed class FeasibilityScoringService
         StructuredDecisionData decision,
         ScoringFactorDefinition factor)
     {
-        var presentFields = factor.SourceFields
+        var sourceFields = factor.SourceFields.Concat(factor.Evaluator is "project_budget" or "product_budget" or "budget_feasibility"
+            ? new[] { "scope", "monthly_cost_per_person", "contingency_percent", "currency" } : Array.Empty<string>()).Distinct().ToList();
+        var presentFields = sourceFields
             .Where(field => decision.Get(field) != null)
             .ToList();
-        var missingFields = factor.SourceFields
+        var missingFields = sourceFields
             .Except(presentFields, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -94,13 +109,8 @@ public sealed class FeasibilityScoringService
 
     private static double BudgetScore(StructuredDecisionData decision, double monthlyCostPerPerson)
     {
-        if (!Number(decision, "budget", out var budget)) return 35;
-        var timeline = NumberOr(decision, "timeline_months", 6);
-        var teamSize = Math.Max(1, NumberOr(decision, "team_size", 1));
-        var scopeCount = Math.Max(1, ListCount(decision.Get("scope")));
-        var complexityMultiplier = 1 + Math.Min(scopeCount, 12) * .04;
-        var required = monthlyCostPerPerson * teamSize * Math.Max(1, timeline) * complexityMultiplier;
-        return FitRatio(budget / required);
+        var economics = DeliveryCostRules.Estimate(decision, monthlyCostPerPerson);
+        return economics == null ? 35 : FitRatio(economics.AvailableBudget / economics.EstimatedCost);
     }
 
     private static double EducationBudgetScore(StructuredDecisionData decision)
@@ -114,10 +124,7 @@ public sealed class FeasibilityScoringService
     private static double TimelineScore(StructuredDecisionData decision)
     {
         if (!Number(decision, "timeline_months", out var timeline)) return 35;
-        var team = Math.Max(1, NumberOr(decision, "team_size", 1));
-        var scope = Math.Max(1, ListCount(decision.Get("scope")));
-        var dependencies = ListCount(decision.Get("dependencies"));
-        var required = Math.Max(1, (scope * 1.25 + dependencies * .8) / Math.Sqrt(team));
+        var required = DeliveryScheduleRules.EstimateMonths(decision);
         return FitRatio(timeline / required);
     }
 
@@ -188,6 +195,7 @@ public sealed class FeasibilityScoringService
         var value = decision.Get("scope");
         if (string.IsNullOrWhiteSpace(value)) return 30;
         var count = ListCount(value);
+        if (count == 0) return 30;
         if (count is >= 1 and <= 8) return 90;
         if (count <= 12) return 75;
         return 55;
@@ -208,22 +216,7 @@ public sealed class FeasibilityScoringService
 
     private static double LevelScore(string? value, double fallback)
     {
-        if (DecisionValidationService.TryNumber(value, out var numeric))
-            return numeric <= 1 ? numeric * 100 : Math.Clamp(numeric, 0, 100);
-        if (string.IsNullOrWhiteSpace(value)) return fallback;
-
-        var normalized = value.Trim().ToLowerInvariant();
-        if (normalized.Contains("very high") || normalized.Contains("ready") || normalized.Contains("strong"))
-            return 90;
-        if (normalized.Contains("high") || normalized.Contains("good"))
-            return 80;
-        if (normalized.Contains("medium") || normalized.Contains("partial") || normalized.Contains("moderate"))
-            return 60;
-        if (normalized.Contains("low") || normalized.Contains("weak"))
-            return 30;
-        if (normalized.Contains("none") || normalized.Contains("unknown"))
-            return 15;
-        return fallback;
+        return DecisionValidationService.TryLevelScore(value, out var score) ? score : fallback;
     }
 
     private static double FitRatio(double ratio) =>
@@ -344,7 +337,5 @@ public sealed class FeasibilityScoringService
         Number(decision, field, out var value) ? value : fallback;
 
     private static int ListCount(string? value) =>
-        string.IsNullOrWhiteSpace(value)
-            ? 0
-            : value.Split(new[] { ',', ';', '\n', '|' }, StringSplitOptions.RemoveEmptyEntries).Length;
+        DeliveryCostRules.SplitList(value).Length;
 }

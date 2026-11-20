@@ -29,6 +29,9 @@ public sealed class AiWorkflowService(IAiProviderResolver providers, IPromptCata
         Func<T, string?> validate, AiExecutionContext? context = null, AiTarget? target = null,
         bool allowFallback = true, string? outputSchema = null, CancellationToken cancellationToken = default)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+        if (providers.DefaultTarget(operation).Provider == "none")
+            throw new AiException("ai_disabled", "Optional AI is disabled. Configure AI_PROVIDER to enable advisory analysis.");
         context ??= scope.Context;
         using var activity = Activities.StartActivity(operation);
         var clock = Stopwatch.StartNew();

@@ -49,11 +49,28 @@ public sealed class DecisionsV2Controller : ControllerBase
         var decision = await _engine.AnalyzeAndCreateAsync(
             request.Input,
             UserId(),
-            cancellationToken);
+            cancellationToken,
+            request.FixedFields);
         return CreatedAtAction(
             nameof(GetById),
             new { id = decision.Id },
             ToResponse(decision));
+    }
+
+    // Structured entry bypasses language-model extraction in every provider mode.
+    [HttpPost("analyze-structured")]
+    [ProducesResponseType(typeof(DecisionEngineResponse), StatusCodes.Status201Created)]
+    public async Task<ActionResult<DecisionEngineResponse>> AnalyzeStructured(
+        [FromBody] AnalyzeStructuredDecisionRequest request, CancellationToken cancellationToken)
+    {
+        if (request.Fields.Count > 100 || request.Fields.Any(pair => pair.Key.Length > 100 || pair.Value == null || pair.Value.Length > 20_000))
+            throw new ArgumentException("Supply at most 100 bounded, non-null fields.");
+        var decision = await _engine.AnalyzeStructuredAndCreateAsync(new StructuredDecisionData
+        {
+            Domain = request.Domain, Title = string.IsNullOrWhiteSpace(request.Title) ? request.Goal[..Math.Min(80, request.Goal.Length)] : request.Title.Trim(),
+            Goal = request.Goal.Trim(), Fields = new(request.Fields, StringComparer.OrdinalIgnoreCase)
+        }, UserId(), cancellationToken);
+        return CreatedAtAction(nameof(GetById), new { id = decision.Id }, ToResponse(decision));
     }
 
     [HttpGet]
@@ -94,7 +111,8 @@ public sealed class DecisionsV2Controller : ControllerBase
             id,
             request.UpdatedInput,
             UserId(),
-            cancellationToken);
+            cancellationToken,
+            request.FixedFields);
         return Ok(new ReplayDecisionResponse(
             ToResponse(result.Decision),
             result.Comparison));
@@ -227,7 +245,12 @@ public sealed class DecisionsV2Controller : ControllerBase
             version.Explanation,
             version.Plan,
             decision.AuditTrail.OrderBy(entry => entry.Timestamp).ToList(),
-            version.CreatedAt);
+            version.CreatedAt,
+            version.Feasibility.RulesVersion,
+            version.Feasibility.ScoreMeaning,
+            version.Feasibility.Economics,
+            version.Improvement,
+            version.Validation.Warnings);
     }
 
     private static DecisionEngineSummaryResponse? ToSummary(DecisionV2 decision)
