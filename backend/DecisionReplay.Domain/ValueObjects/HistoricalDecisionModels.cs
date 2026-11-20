@@ -54,4 +54,4 @@ public sealed class ReplayScenario
     public List<ReplayAnalysisRecord> Analyses { get; set; } = new();
 }
 
-public sealed class DecisionConflictException() : Exception("The decision changed during this request. Reload and retry.");
+public sealed class DecisionConflictException(string message = "The decision changed during this request. Reload and retry.") : Exception(message);

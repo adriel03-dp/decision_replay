@@ -56,11 +56,12 @@ public sealed class DecisionEngineService
         => await CreateAsync(naturalLanguageInput, userId, null, cancellationToken, fixedFields);
 
     public Task<DecisionV2> AnalyzeStructuredAndCreateAsync(StructuredDecisionData structured, string userId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? originalInput = null)
     {
         if (!_templates.IsSupported(structured.Domain)) throw new ArgumentException("Unsupported decision domain.");
         if (string.IsNullOrWhiteSpace(structured.Goal)) throw new ArgumentException("A goal is required.");
-        return CreateAsync(structured.Goal.Trim(), userId, structured, cancellationToken);
+        if (originalInput?.Length > 20000) throw new ArgumentException("Original input must contain at most 20000 characters.");
+        return CreateAsync(string.IsNullOrWhiteSpace(originalInput) ? structured.Goal.Trim() : originalInput.Trim(), userId, structured, cancellationToken);
     }
 
     private async Task<DecisionV2> CreateAsync(string naturalLanguageInput, string userId,

@@ -62,7 +62,7 @@ public sealed class RulesFirstEngineTests
         var decision = await engine.AnalyzeAndCreateAsync(input, "owner");
         var first = decision.Versions.Single();
         Assert.NotNull(first.Plan);
-        Assert.Equal("2.0", first.Feasibility.RulesVersion);
+        Assert.Equal(FeasibilityScoringService.CurrentRulesVersion, first.Feasibility.RulesVersion);
         Assert.Equal("constraints_unsatisfied", first.Improvement!.Status);
         Assert.Null(first.Improvement.Assessment);
         Assert.Contains("budget", first.Improvement.ConstraintCheck!.FixedFields);
@@ -196,7 +196,7 @@ public sealed class RulesFirstEngineTests
         var decision = await Engine(new RulesLanguageService(), new()).AnalyzeStructuredAndCreateAsync(Project(), "owner");
         var restored = BsonSerializer.Deserialize<DecisionReplay.Domain.Entities.DecisionV2>(decision.ToBson());
         var version = restored.GetCurrentVersion()!;
-        Assert.Equal("2.0", version.Feasibility.RulesVersion);
+        Assert.Equal(FeasibilityScoringService.CurrentRulesVersion, version.Feasibility.RulesVersion);
         Assert.Equal(decision.GetCurrentVersion()!.Feasibility.Economics!.EstimatedCost, version.Feasibility.Economics!.EstimatedCost);
         Assert.Single(version.Improvement!.Changes);
         Assert.Equal("budget", version.Improvement.Changes[0].Field);
@@ -211,7 +211,7 @@ public sealed class RulesFirstEngineTests
         var comparison = new ReplayComparisonService().Compare(previous, current, _templates.Get("project_planning"));
         Assert.Empty(comparison.ChangedFields);
         Assert.Contains("methodology changes", comparison.MainReason);
-        Assert.Contains("1.0 to 2.0", comparison.MainReason);
+        Assert.Contains($"1.0 to {FeasibilityScoringService.CurrentRulesVersion}", comparison.MainReason);
     }
 
     private FeasibilityAssessment Score(StructuredDecisionData data) => _scoring.Calculate(data, _templates.Get(data.Domain), _validation.Validate(data, _templates.Get(data.Domain)));

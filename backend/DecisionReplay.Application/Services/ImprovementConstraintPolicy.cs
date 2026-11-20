@@ -41,6 +41,8 @@ public static class ImprovementConstraintPolicy
         foreach (var field in result.FixedFields)
             if (!string.Equals(original.Get(field), proposed.Get(field), StringComparison.OrdinalIgnoreCase))
                 result.Reasons.Add($"Fixed field '{field}' cannot change in an improvement proposal.");
+        if (!ScopePriorityRules.PreservesRequiredScope(original, proposed))
+            result.Reasons.Add("A must-have scope item cannot be deferred by an improvement proposal.");
         if (result.FixedFields.Contains("budget"))
         {
             var hasBudget = DecisionValidationService.TryNumber(original.Get("budget"), out var budget) && budget >= 0;

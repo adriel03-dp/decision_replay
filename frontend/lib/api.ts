@@ -5,8 +5,16 @@ import type {
   DecisionEngineSummary,
   ReplayDecisionResponse,
 } from "./api-types"
+import type { RequirementDraft } from "./requirements-types"
 
 export const decisionApi = {
+  async analyzeStructured(draft: RequirementDraft): Promise<DecisionEngineResponse> {
+    return (await apiClient.post<DecisionEngineResponse>("/api/v2/decisions/analyze-structured", draft)).data
+  },
+
+  async acceptImprovement(decisionId: string, sourceVersion: number): Promise<ReplayDecisionResponse> {
+    return (await apiClient.post<ReplayDecisionResponse>(`/api/v2/decisions/${decisionId}/improvement/accept`, { sourceVersion })).data
+  },
   async analyze(input: string, fixedFields?: string[]): Promise<DecisionEngineResponse> {
     const response = await apiClient.post<DecisionEngineResponse>("/api/v2/decisions", { input, fixedFields })
     return response.data

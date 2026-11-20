@@ -22,6 +22,7 @@ public sealed class DecisionValidationService
             try { ImprovementConstraintPolicy.Resolve(decision, template); }
             catch (ArgumentException error) { result.Errors.Add(error.Message); }
         }
+        if (ScopePriorityRules.Validate(decision) is { } scopeError) result.Errors.Add(scopeError);
 
         foreach (var field in template.Fields)
         {

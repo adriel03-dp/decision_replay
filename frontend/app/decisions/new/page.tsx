@@ -1,7 +1,6 @@
 "use client"
 
-import { useState } from "react"
-import axios from "axios"
+import { useEffect, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -18,14 +17,15 @@ import {
 import { Button } from "@/components/ui/button"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { decisionApi } from "@/lib/api"
 import { useToast } from "@/hooks/use-toast"
+import { useRequirementReview } from "@/hooks/use-requirement-review"
+import { RequirementsReview } from "@/components/requirements-review"
 
 const EXAMPLE =
   "Build a mobile application within six months with a team of six and a budget of 100,000 USD; scope: onboarding, weekly plans, payments, analytics; technical_readiness: partial; monthly_cost_per_person: 2000; contingency_percent: 20"
 
 const PIPELINE = [
-  ["Submit", "Share the current version of your idea, even if it is still rough."],
+  ["Review", "Extract your requirements, correct the values and mark must-haves before scoring."],
   ["Grade", "Decision Replay measures feasibility and highlights what is holding it back."],
   ["Improve", "You get specific advice on what to change, add, reduce, or validate."],
   ["Execute", "The upgraded roadmap shows what to do next to make the plan stronger."],
@@ -34,12 +34,15 @@ const PIPELINE = [
 export default function NewDecisionPage() {
   const router = useRouter()
   const { toast } = useToast()
+  const workflow = useRequirementReview()
   const [input, setInput] = useState("")
-  const [submitting, setSubmitting] = useState(false)
+  const submitting = !!workflow.busy
   const [error, setError] = useState<string | null>(null)
   const [fixedBudget, setFixedBudget] = useState(true)
   const [fixedTimeline, setFixedTimeline] = useState(true)
   const [fixedScope, setFixedScope] = useState(false)
+  const reviewing = !!workflow.draft
+  useEffect(() => { if (reviewing) document.getElementById("requirements-review-heading")?.focus() }, [reviewing])
 
   async function handleAnalyze() {
     if (input.trim().length < 10) {
@@ -47,27 +50,20 @@ export default function NewDecisionPage() {
       return
     }
 
-    setSubmitting(true)
     setError(null)
-    try {
-      const fixedFields = [fixedBudget ? "budget" : null, fixedTimeline ? "timeline_months" : null, fixedScope ? "scope" : null]
-        .filter((field): field is string => field !== null)
-      const result = await decisionApi.analyze(input.trim(), fixedFields)
+    const fixedFields = [fixedBudget ? "budget" : null, fixedTimeline ? "timeline_months" : null, fixedScope ? "scope" : null]
+      .filter((field): field is string => field !== null)
+    await workflow.preview(input.trim(), fixedFields)
+  }
+
+  async function handleCreate() {
+      const result = await workflow.create()
+      if (!result) return
       toast({
         title: "Plan graded",
         description: `Version ${result.version} received a ${Math.round(result.feasibilityScore)}/100 plan grade.`,
       })
       router.push(`/decisions/${result.decisionId}/analytics`)
-    } catch (requestError) {
-      const message = axios.isAxiosError(requestError)
-        ? requestError.response?.data?.message ??
-          requestError.response?.data?.Message ??
-          "The decision could not be analyzed."
-        : "The decision could not be analyzed."
-      setError(message)
-    } finally {
-      setSubmitting(false)
-    }
   }
 
   return (
@@ -103,7 +99,9 @@ export default function NewDecisionPage() {
               index, not a probability of success.
             </p>
 
-            <Card className="mt-8 overflow-hidden border-white/10 bg-slate-950/80 shadow-2xl shadow-black/30">
+            {workflow.error && <p role="alert" className="my-4 rounded-lg border border-red-400/30 p-4 text-sm text-red-300">{workflow.error}</p>}
+            {workflow.schemaError && <div role="alert" className="my-4 rounded-lg border border-amber-400/30 p-4 text-sm text-amber-200"><p>{workflow.schemaError}</p><button type="button" onClick={workflow.retrySchema} className="min-h-11 underline">Retry field definitions</button></div>}
+            {workflow.draft ? <div className="mt-8"><RequirementsReview draft={workflow.draft} domains={workflow.domains} review={workflow.review} dirty={workflow.dirty} acknowledged={workflow.acknowledged} busy={workflow.busy} onChange={workflow.edit} onAcknowledge={workflow.setAcknowledged} onValidate={workflow.validate} onCreate={handleCreate} onBack={workflow.reset} /></div> : <Card className="mt-8 overflow-hidden border-white/10 bg-slate-950/80 shadow-2xl shadow-black/30">
               <div className="h-1 bg-gradient-to-r from-green-400 via-emerald-400 to-sky-400" />
               <CardContent className="p-5 sm:p-7">
                 <div className="mb-3 flex items-center justify-between gap-4">
@@ -159,7 +157,7 @@ export default function NewDecisionPage() {
                   </button>
                   <Button
                     onClick={handleAnalyze}
-                    disabled={submitting}
+                    disabled={submitting || !workflow.domains.length}
                     className="bg-green-400 text-black hover:bg-green-300"
                   >
                     {submitting ? (
@@ -167,12 +165,12 @@ export default function NewDecisionPage() {
                     ) : (
                       <Gauge className="mr-2 h-4 w-4" />
                     )}
-                    Grade and improve plan
+                    {submitting ? "Extracting requirements…" : !workflow.domains.length ? "Loading field definitions…" : "Review requirements"}
                     {!submitting && <ArrowRight className="ml-2 h-4 w-4" />}
                   </Button>
                 </div>
               </CardContent>
-            </Card>
+            </Card>}
           </section>
 
           <aside className="lg:pt-20">
